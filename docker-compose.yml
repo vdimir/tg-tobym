@@ -1,0 +1,21 @@
+version: '2'
+
+services:
+    tobym:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                - REVISION_INFO
+        image: vdimir/tobym:latest
+        container_name: "tobym"
+        hostname: "tobym"
+        restart: always
+
+        # ports:
+        #     - "127.0.0.1:8443:8443"
+
+        environment:
+            - BOT_TOKEN
+        volumes:
+            - ./var:/srv/var

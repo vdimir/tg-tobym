@@ -1,7 +1,7 @@
 package service
 
 import (
-	"log"
+	"path"
 
 	"github.com/asdine/storm/v3"
 )
@@ -12,13 +12,13 @@ type Storage struct {
 }
 
 type MsgVote struct {
-	ID int
+	ID    int
 	Users map[int]int
 }
 
 // NewStorage creates new Stroage
-func NewStorage(path string) (*Storage, error)  {
-	db, err := storm.Open(path)
+func NewStorage(folderPath string) (*Storage, error) {
+	db, err := storm.Open(path.Join(folderPath, "data.db"))
 	if err != nil {
 		return nil, err
 	}
@@ -34,9 +34,9 @@ func NewStorage(path string) (*Storage, error)  {
 	}, nil
 }
 
-func (s *Storage) AddVote(userID int, messageID int, increment int) (*MsgVote,error) {
+func (s *Storage) AddVote(userID int, messageID int, increment int) (*MsgVote, error) {
 	votesStore, err := s.db.From("votes").Begin(true)
-	log.Printf("[DEBUG] begin tx")
+
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,6 @@ func (s *Storage) AddVote(userID int, messageID int, increment int) (*MsgVote,er
 		return nil, err
 	}
 
-	log.Printf("[DEBUG] Commit tx")
 	return data, votesStore.Commit()
 }
 

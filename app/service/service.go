@@ -14,11 +14,10 @@ const voteCallbackDataPrefix = "vote"
 const voteCallbackDataInc = voteCallbackDataPrefix + "+"
 const voteCallbackDataDec = voteCallbackDataPrefix + "-"
 
-// BotConfig provedes configuration for BotService
-type BotConfig struct {
+// Config provides configuration for BotService
+type Config struct {
 	Token      string
 	WebHookURL string
-	UseWebHook bool
 	Debug      bool
 	DataPath   string
 }
@@ -26,13 +25,13 @@ type BotConfig struct {
 // BotService contains common application data
 type BotService struct {
 	bot     *tgbotapi.BotAPI
-	cfg     *BotConfig
+	cfg     *Config
 	store   *Storage
 	updates tgbotapi.UpdatesChannel
 }
 
 // NewBotService creates BotService
-func NewBotService(cfg *BotConfig) (*BotService, error) {
+func NewBotService(cfg *Config) (*BotService, error) {
 	store, err := NewStorage(cfg.DataPath)
 	if err != nil {
 		return nil, err
@@ -52,7 +51,7 @@ func NewBotService(cfg *BotConfig) (*BotService, error) {
 
 // Init service, setup connection
 func (s *BotService) Init() error {
-	if s.cfg.UseWebHook {
+	if s.cfg.WebHookURL != "" {
 		log.Printf("[INFO] set up webhook")
 		_, err := s.bot.SetWebhook(tgbotapi.NewWebhook(s.cfg.WebHookURL + s.bot.Token))
 		if err != nil {
@@ -190,7 +189,7 @@ func (s *BotService) handleMessage(msg *tgbotapi.Message) (err error) {
 
 // Close service
 func (s *BotService) Close() (err error) {
-	if s.cfg.UseWebHook {
+	if s.cfg.WebHookURL != "" {
 		_, err = s.bot.RemoveWebhook()
 
 	} else {
