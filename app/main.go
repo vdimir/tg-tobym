@@ -69,6 +69,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("[ERROR] Wrong arguments %v", err)
 	}
+
 	token, err := readToken(opts.Bot.Token)
 	if err != nil {
 		log.Fatalf("[ERROR] token reading error %v", err)

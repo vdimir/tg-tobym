@@ -1,6 +1,6 @@
 # tobym
 
-## description
+## Description
 
 Simple telegram bot for personal usage.
 
