@@ -181,7 +181,7 @@ func (s *BotService) handleCallcackQuery(msg *tgbotapi.CallbackQuery) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("[DEBUG] inline rep %s", msg.InlineMessageID)
+
 		replyMsg := tgbotapi.NewEditMessageReplyMarkup(
 			msg.Message.Chat.ID, msg.Message.MessageID,
 			tgbotapi.NewInlineKeyboardMarkup(voteAgg.InlineKeyboardRow()),
