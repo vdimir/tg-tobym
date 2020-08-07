@@ -38,7 +38,9 @@ jobs:
         env:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
           SSH_HOST: tobym.markify.dev
+          WEB_HOOK_URL: "https://tobym.markify.dev"
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: |
           scp docker-compose.yml vdimir@$SSH_HOST:/srv/tobym
           ssh vdimir@$SSH_HOST "cd /srv/tobym && docker-compose pull"
-          ssh vdimir@$SSH_HOST "cd /srv/tobym && BOT_TOKEN=${{ secrets.BOT_TOKEN }} docker-compose up -d"
+          ssh vdimir@$SSH_HOST "cd /srv/tobym && docker-compose up -d"

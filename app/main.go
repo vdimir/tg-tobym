@@ -19,23 +19,35 @@ var revision = "local"
 // Opts contains command-line options
 type Opts struct {
 	Bot struct {
-		Token      string
-		WebHookURL string
+		Token         string
+		WebHookURL    string
+		WebHookListen string
+		Debug         bool
 	}
 	Store struct {
 		Path string
 	}
 }
 
+func overWriteWithEnv(value *string, envName string) {
+	envVal := os.Getenv(envName)
+	if envVal != "" {
+		*value = envVal
+	}
+}
+
 func parseArgs() (Opts, error) {
 	var opts Opts
 
-	flag.StringVar(&opts.Bot.Token, "token", "", "path to file with token")
-	flag.StringVar(&opts.Bot.WebHookURL, "webhook", "", "bot webhook url")
+	flag.StringVar(&opts.Bot.Token, "token", "", "path to file with token [$BOT_TOKEN]")
+	flag.StringVar(&opts.Bot.WebHookURL, "webhook", "", "bot webhook url [$WEB_HOOK_URL]")
+	flag.StringVar(&opts.Bot.WebHookListen, "listen", ":8443", "bot listen on")
+	flag.BoolVar(&opts.Bot.Debug, "debug", false, "print all bot mesaages to log")
 	flag.StringVar(&opts.Store.Path, "data_path", "./var", "folder to store data")
 
 	flag.Parse()
 
+	overWriteWithEnv(&opts.Bot.WebHookURL, "WEB_HOOK_URL")
 	return opts, nil
 }
 
@@ -76,10 +88,11 @@ func main() {
 	}
 
 	cfg := &service.Config{
-		Token:      token,
-		DataPath:   opts.Store.Path,
-		WebHookURL: opts.Bot.WebHookURL,
-		Debug:      false,
+		Token:         token,
+		DataPath:      opts.Store.Path,
+		WebHookURL:    opts.Bot.WebHookURL,
+		WebHookListen: opts.Bot.WebHookListen,
+		Debug:         opts.Bot.Debug,
 	}
 
 	botService, err := service.NewBotService(cfg)

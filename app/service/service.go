@@ -3,6 +3,8 @@ package service
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -16,10 +18,11 @@ const voteCallbackDataDec = voteCallbackDataPrefix + "-"
 
 // Config provides configuration for BotService
 type Config struct {
-	Token      string
-	WebHookURL string
-	Debug      bool
-	DataPath   string
+	Token         string
+	WebHookURL    string
+	WebHookListen string
+	Debug         bool
+	DataPath      string
 }
 
 // BotService contains common application data
@@ -28,6 +31,7 @@ type BotService struct {
 	cfg     *Config
 	store   *Storage
 	updates tgbotapi.UpdatesChannel
+	srv     *http.Server
 }
 
 // NewBotService creates BotService
@@ -51,30 +55,50 @@ func NewBotService(cfg *Config) (*BotService, error) {
 
 // Init service, setup connection
 func (s *BotService) Init() error {
+	var err error
+
 	if s.cfg.WebHookURL != "" {
-		log.Printf("[INFO] set up webhook")
-		_, err := s.bot.SetWebhook(tgbotapi.NewWebhook(s.cfg.WebHookURL + s.bot.Token))
+		log.Printf("[INFO] set up webhook for %s", s.cfg.WebHookURL)
+
+		webHookEndpoint := s.cfg.WebHookURL + "/" + s.bot.Token
+		_, err := url.Parse(webHookEndpoint)
+		if err != nil {
+			return errors.Wrapf(err, "wrong url")
+		}
+		_, err = s.bot.SetWebhook(tgbotapi.NewWebhook(webHookEndpoint))
 		if err != nil {
 			return err
 		}
+
 		info, err := s.bot.GetWebhookInfo()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		if info.LastErrorDate != 0 {
-			log.Printf("Telegram callback failed: %s", info.LastErrorMessage)
+			log.Printf("[WARN] Telegram callback failed: %s", info.LastErrorMessage)
 		}
+
 		s.updates = s.bot.ListenForWebhook("/" + s.bot.Token)
-		// go http.ListenAndServe("0.0.0.0:8443")
-		return nil
+
+		listenAddr := ":8443"
+		if s.cfg.WebHookListen != "" {
+			listenAddr = s.cfg.WebHookListen
+		}
+		s.srv = &http.Server{Addr: listenAddr}
+
+		go func() {
+			err = s.srv.ListenAndServe()
+			if err != http.ErrServerClosed {
+				log.Printf("[ERROR] listen error: %v", err)
+			}
+		}()
+	} else {
+
+		log.Printf("[INFO] set up long pool")
+		u := tgbotapi.NewUpdate(0)
+		u.Timeout = 60
+		s.updates, err = s.bot.GetUpdatesChan(u)
 	}
-
-	log.Printf("[INFO] set up long pool")
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-
-	var err error
-	s.updates, err = s.bot.GetUpdatesChan(u)
 	return err
 }
 
@@ -189,9 +213,13 @@ func (s *BotService) handleMessage(msg *tgbotapi.Message) (err error) {
 
 // Close service
 func (s *BotService) Close() (err error) {
-	if s.cfg.WebHookURL != "" {
+	errs := &multierror.Error{}
+	if s.cfg.WebHookURL != "" && s.srv != nil {
 		_, err = s.bot.RemoveWebhook()
+		errs = multierror.Append(errs, err)
 
+		err = s.srv.Close()
+		errs = multierror.Append(errs, err)
 	} else {
 		s.bot.StopReceivingUpdates()
 	}
