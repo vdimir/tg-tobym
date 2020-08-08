@@ -1,14 +1,12 @@
-package service
+package subapp
 
 import (
-	"path"
-
 	"github.com/asdine/storm/v3"
+	"github.com/vdimir/tg-tobym/app/store"
 )
 
-// Storage stores data
-type Storage struct {
-	db *storm.DB
+type VoteStore struct {
+	Store *store.Storage
 }
 
 type MsgVote struct {
@@ -16,26 +14,8 @@ type MsgVote struct {
 	Users map[int]int
 }
 
-// NewStorage creates new Stroage
-func NewStorage(folderPath string) (*Storage, error) {
-	db, err := storm.Open(path.Join(folderPath, "data.db"))
-	if err != nil {
-		return nil, err
-	}
-	votesStore := db.From("votes")
-	err = votesStore.Init(&MsgVote{})
-
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	return &Storage{
-		db: db,
-	}, nil
-}
-
-func (s *Storage) AddVote(userID int, messageID int, increment int) (*MsgVote, error) {
-	votesStore, err := s.db.From("votes").Begin(true)
+func (s *VoteStore) AddVote(userID int, messageID int, increment int) (*MsgVote, error) {
+	votesStore, err := s.Store.DB.From("votes").Begin(true)
 
 	if err != nil {
 		return nil, err
@@ -68,9 +48,4 @@ func (s *Storage) AddVote(userID int, messageID int, increment int) (*MsgVote, e
 	}
 
 	return data, votesStore.Commit()
-}
-
-// Close storage
-func (s *Storage) Close() error {
-	return s.db.Close()
 }
