@@ -108,7 +108,7 @@ func main() {
 	defer func() {
 		err := botService.Close()
 		if err != nil {
-			log.Printf("[ERROR] cannot close bot %v", err)
+			log.Printf("[ERROR] Cannot close bot %v", err)
 		}
 	}()
 

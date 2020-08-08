@@ -86,7 +86,7 @@ func (s *BotService) Init() error {
 	var err error
 
 	if s.cfg.WebHookURL != "" {
-		log.Printf("[INFO] set up webhook for %s", s.cfg.WebHookURL)
+		log.Printf("[INFO] Set up webhook for %s", s.cfg.WebHookURL)
 
 		webHookEndpoint := s.cfg.WebHookURL + "/" + s.bot.Token
 		_, err := url.Parse(webHookEndpoint)
@@ -114,16 +114,16 @@ func (s *BotService) Init() error {
 		s.srv = &http.Server{Addr: s.cfg.WebHookListen}
 
 		go func() {
-			log.Printf("[DEBUG] start listen %q", s.srv.Addr)
+			log.Printf("[DEBUG] Start listen %q", s.srv.Addr)
 			err = s.srv.ListenAndServe()
 			if err != http.ErrServerClosed {
-				log.Printf("[ERROR] listen error: %v", err)
+				log.Printf("[ERROR] Listen error: %v", err)
 			}
 		}()
 
 		err = waitHTTPServerStart(s.srv.Addr, 10)
 	} else {
-		log.Printf("[INFO] set up long pool")
+		log.Printf("[INFO] Set up LongPool")
 		u := tgbotapi.NewUpdate(0)
 		u.Timeout = 60
 		s.updates, err = s.bot.GetUpdatesChan(u)
@@ -137,7 +137,7 @@ func (s *BotService) MainLoop() {
 		for _, sapp := range s.subapps {
 			cont, err := sapp.HandleUpdate(&update)
 			if err != nil {
-				log.Printf("[WARN] error during handling update %v", err)
+				log.Printf("[WARN] Error during handling update %v", err)
 			}
 			if !cont {
 				break

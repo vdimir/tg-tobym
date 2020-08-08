@@ -44,7 +44,7 @@ type MockTelegramServer struct {
 }
 
 func (m *MockTelegramServer) RoundTrip(r *http.Request) (*http.Response, error) {
-	log.Printf("[INFO] mock request %v\n", r)
+	log.Printf("[INFO] Mock request %v\n", r)
 
 	resp := &http.Response{StatusCode: http.StatusNotFound}
 	setBodyOk := func(resp *http.Response, text string) {
@@ -67,7 +67,7 @@ func (m *MockTelegramServer) RoundTrip(r *http.Request) (*http.Response, error) 
 	}
 	if strings.HasSuffix(r.URL.Path, "/setWebhook") {
 		body, err := ioutil.ReadAll(r.Body)
-		log.Printf("[INFO] mock request body %v\n", string(body))
+		log.Printf("[INFO] Mock request body %v\n", string(body))
 		if err != nil {
 			panic(err)
 		}
@@ -96,8 +96,6 @@ func (m *MockTelegramServer) RoundTrip(r *http.Request) (*http.Response, error) 
 	if strings.HasSuffix(r.URL.Path, "/sendMessage") {
 		setBodyOk(resp, "")
 		m.SentMessages++
-		log.Printf(">>>>>>> %v", m)
-
 	}
 
 	return resp, nil
