@@ -89,6 +89,10 @@ func (m *MockTelegramServer) RoundTrip(r *http.Request) (*http.Response, error) 
 		}
 	}
 
+	if strings.HasSuffix(r.URL.Path, "/deleteWebhook") {
+		setBodyOk(resp, `{"ok":true,"result":true,"description":"Webhook was deleted"}`)
+	}
+
 	if strings.HasSuffix(r.URL.Path, "/getWebhookInfo") {
 		setBodyOk(resp, `{"ok":true,"result":{"url":"","has_custom_certificate":false,"pending_update_count":0}}`)
 	}
