@@ -93,6 +93,8 @@ func main() {
 		WebHookURL:    opts.Bot.WebHookURL,
 		WebHookListen: opts.Bot.WebHookListen,
 		Debug:         opts.Bot.Debug,
+
+		AppVersion: revision,
 	}
 
 	botService, err := service.NewBotService(cfg)

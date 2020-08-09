@@ -23,6 +23,8 @@ type Config struct {
 	Debug         bool
 	DataPath      string
 	BotClient     *http.Client
+
+	AppVersion string
 }
 
 // BotService contains common application data
@@ -47,7 +49,7 @@ func NewBotService(cfg *Config) (*BotService, error) {
 	if cfg.BotClient == nil {
 		bot, err = tgbotapi.NewBotAPI(cfg.Token)
 	} else {
-		bot, err = tgbotapi.NewBotAPIWithClient(cfg.Token, cfg.BotClient)
+		bot, err = tgbotapi.NewBotAPIWithClient(cfg.Token, tgbotapi.APIEndpoint, cfg.BotClient)
 	}
 	if err != nil {
 		return nil, err
@@ -66,6 +68,7 @@ func NewBotService(cfg *Config) (*BotService, error) {
 
 	subappConfigs := []interface{}{
 		&subapp.VoteAppConfig{},
+		&subapp.ShowVersionConfig{Version: cfg.AppVersion},
 	}
 
 	for _, cfg := range subappConfigs {

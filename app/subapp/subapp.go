@@ -20,6 +20,8 @@ func NewSubApp(bot *tgbotapi.BotAPI, store *store.Storage, cfg interface{}) (Sub
 	switch cfg := cfg.(type) {
 	case *VoteAppConfig:
 		return NewVoteApp(bot, store, cfg)
+	case *ShowVersionConfig:
+		return NewShowVersionApp(bot, store, cfg)
 	}
 	return nil, errors.Errorf("unknown subapp config")
 }
