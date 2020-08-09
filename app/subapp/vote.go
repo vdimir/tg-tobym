@@ -8,6 +8,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/hashicorp/go-multierror"
+	"github.com/vdimir/tg-tobym/app/store"
 )
 
 const voteCallbackDataPrefix = "vote"
@@ -18,6 +19,16 @@ const voteCallbackDataDec = voteCallbackDataPrefix + "-"
 type VoteApp struct {
 	Bot   *tgbotapi.BotAPI
 	Store *VoteStore
+}
+
+type VoteAppConfig struct {
+}
+
+func NewVoteApp(bot *tgbotapi.BotAPI, store *store.Storage, cfg *VoteAppConfig) (*VoteApp, error) {
+	return &VoteApp{
+		Bot:   bot,
+		Store: &VoteStore{Store: store},
+	}, nil
 }
 
 // Init setup VoteApp

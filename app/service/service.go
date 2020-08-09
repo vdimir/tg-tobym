@@ -64,10 +64,17 @@ func NewBotService(cfg *Config) (*BotService, error) {
 		ctxCancel: ctxCancel,
 	}
 
-	srv.subapps = append(srv.subapps, &subapp.VoteApp{
-		Bot:   bot,
-		Store: &subapp.VoteStore{Store: store},
-	})
+	subappConfigs := []interface{}{
+		&subapp.VoteAppConfig{},
+	}
+
+	for _, cfg := range subappConfigs {
+		sapp, err := subapp.NewSubApp(bot, store, cfg)
+		if err != nil {
+			return srv, err
+		}
+		srv.subapps = append(srv.subapps, sapp)
+	}
 
 	return srv, nil
 }
