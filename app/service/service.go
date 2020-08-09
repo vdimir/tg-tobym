@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"log"
 	"net"
 	"net/http"
@@ -26,12 +27,14 @@ type Config struct {
 
 // BotService contains common application data
 type BotService struct {
-	bot     *tgbotapi.BotAPI
-	cfg     *Config
-	store   *store.Storage
-	updates tgbotapi.UpdatesChannel
-	srv     *http.Server
-	subapps []subapp.SubApp
+	bot       *tgbotapi.BotAPI
+	cfg       *Config
+	store     *store.Storage
+	updates   tgbotapi.UpdatesChannel
+	srv       *http.Server
+	subapps   []subapp.SubApp
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 }
 
 // NewBotService creates BotService
@@ -50,11 +53,15 @@ func NewBotService(cfg *Config) (*BotService, error) {
 		return nil, err
 	}
 	bot.Debug = cfg.Debug
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	srv := &BotService{
-		bot:     bot,
-		cfg:     cfg,
-		store:   store,
-		subapps: []subapp.SubApp{},
+		bot:       bot,
+		cfg:       cfg,
+		store:     store,
+		subapps:   []subapp.SubApp{},
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
 	}
 
 	srv.subapps = append(srv.subapps, &subapp.VoteApp{
@@ -128,6 +135,16 @@ func (s *BotService) Init() error {
 		u.Timeout = 60
 		s.updates, err = s.bot.GetUpdatesChan(u)
 	}
+
+	if err != nil {
+		return errors.Wrapf(err, "error inialize server")
+	}
+	for _, subapp := range s.subapps {
+		err = subapp.Init()
+		if err != nil {
+			return errors.Wrapf(err, "error inialize subapp")
+		}
+	}
 	return err
 }
 
@@ -135,7 +152,7 @@ func (s *BotService) Init() error {
 func (s *BotService) MainLoop() {
 	for update := range s.updates {
 		for _, sapp := range s.subapps {
-			cont, err := sapp.HandleUpdate(&update)
+			cont, err := sapp.HandleUpdate(s.ctx, &update)
 			if err != nil {
 				log.Printf("[WARN] Error during handling update %v", err)
 			}
@@ -152,14 +169,20 @@ func (s *BotService) Close() (err error) {
 	if s.cfg == nil {
 		return errors.Errorf("close uninialized service")
 	}
-	if s.cfg.WebHookURL != "" && s.srv != nil {
+	s.bot.StopReceivingUpdates()
+
+	if s.cfg.WebHookURL != "" {
 		_, err = s.bot.RemoveWebhook()
 		errs = multierror.Append(errs, err)
 
+	}
+
+	if s.srv != nil {
 		err = s.srv.Close()
 		errs = multierror.Append(errs, err)
-	} else {
-		s.bot.StopReceivingUpdates()
 	}
+
+	s.ctxCancel()
+
 	return err
 }

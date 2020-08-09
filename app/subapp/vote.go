@@ -1,6 +1,7 @@
 package subapp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,12 +14,19 @@ const voteCallbackDataPrefix = "vote"
 const voteCallbackDataInc = voteCallbackDataPrefix + "+"
 const voteCallbackDataDec = voteCallbackDataPrefix + "-"
 
+// VoteApp sends vote form for particular messages in chats
 type VoteApp struct {
 	Bot   *tgbotapi.BotAPI
 	Store *VoteStore
 }
 
-func (vapp *VoteApp) HandleUpdate(upd *tgbotapi.Update) (cont bool, err error) {
+// Init setup VoteApp
+func (vapp *VoteApp) Init() (err error) {
+	return nil
+}
+
+// HandleUpdate processes event
+func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (cont bool, err error) {
 	if upd.Message != nil {
 		err = vapp.handleMessage(upd.Message)
 	}
@@ -28,16 +36,21 @@ func (vapp *VoteApp) HandleUpdate(upd *tgbotapi.Update) (cont bool, err error) {
 	return true, err
 }
 
+// Close shutdown VoteApp
+func (vapp *VoteApp) Close() (err error) {
+	return nil
+}
+
 func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) bool {
 	return msg.Photo != nil || (msg.Text == "#vote" && msg.ReplyToMessage != nil)
 }
 
-type VoteAggregateMsgInfo struct {
+type voteAggregateMsgInfo struct {
 	Plus  int
 	Minus int
 }
 
-func (info VoteAggregateMsgInfo) InlineKeyboardRow() []tgbotapi.InlineKeyboardButton {
+func (info voteAggregateMsgInfo) inlineKeyboardRow() []tgbotapi.InlineKeyboardButton {
 	plusText := "+"
 	if info.Plus > 0 {
 		plusText = fmt.Sprintf("+%d", info.Plus)
@@ -54,7 +67,7 @@ func (info VoteAggregateMsgInfo) InlineKeyboardRow() []tgbotapi.InlineKeyboardBu
 	)
 }
 
-func (vapp *VoteApp) updateVote(msg *tgbotapi.CallbackQuery) (info VoteAggregateMsgInfo, err error) {
+func (vapp *VoteApp) updateVote(msg *tgbotapi.CallbackQuery) (info voteAggregateMsgInfo, err error) {
 	voteMsgID := msg.Message.ReplyToMessage.MessageID
 	increment := 0
 	if msg.Data == voteCallbackDataInc {
@@ -93,7 +106,7 @@ func (vapp *VoteApp) handleCallcackQuery(msg *tgbotapi.CallbackQuery) error {
 
 		replyMsg := tgbotapi.NewEditMessageReplyMarkup(
 			msg.Message.Chat.ID, msg.Message.MessageID,
-			tgbotapi.NewInlineKeyboardMarkup(voteAgg.InlineKeyboardRow()),
+			tgbotapi.NewInlineKeyboardMarkup(voteAgg.inlineKeyboardRow()),
 		)
 		_, err = vapp.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(msg.ID, "ok"))
 		errs = multierror.Append(errs, err)
@@ -114,7 +127,7 @@ func (vapp *VoteApp) handleMessage(msg *tgbotapi.Message) (err error) {
 		}
 
 		respMsg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-			VoteAggregateMsgInfo{}.InlineKeyboardRow())
+			voteAggregateMsgInfo{}.inlineKeyboardRow())
 		_, err = vapp.Bot.Send(respMsg)
 	}
 	return err
