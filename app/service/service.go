@@ -29,14 +29,16 @@ type Config struct {
 
 // BotService contains common application data
 type BotService struct {
-	bot       *tgbotapi.BotAPI
-	cfg       *Config
-	store     *store.Storage
-	updates   tgbotapi.UpdatesChannel
-	srv       *http.Server
-	subapps   []subapp.SubApp
-	ctx       context.Context
-	ctxCancel context.CancelFunc
+	bot        *tgbotapi.BotAPI
+	cfg        *Config
+	store      *store.Storage
+	updates    tgbotapi.UpdatesChannel
+	webHookSrv *http.Server
+	subapps    []subapp.SubApp
+
+	mainLoopDone chan (struct{})
+	ctx          context.Context
+	ctxCancel    context.CancelFunc
 }
 
 // NewBotService creates BotService
@@ -58,12 +60,13 @@ func NewBotService(cfg *Config) (*BotService, error) {
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	srv := &BotService{
-		bot:       bot,
-		cfg:       cfg,
-		store:     store,
-		subapps:   []subapp.SubApp{},
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
+		bot:          bot,
+		cfg:          cfg,
+		store:        store,
+		subapps:      []subapp.SubApp{},
+		mainLoopDone: nil,
+		ctx:          ctx,
+		ctxCancel:    ctxCancel,
 	}
 
 	subappConfigs := []interface{}{
@@ -128,17 +131,17 @@ func (s *BotService) Init() error {
 		if s.cfg.WebHookListen == "" {
 			return errors.Errorf("WebHookListen should be set if webHook used")
 		}
-		s.srv = &http.Server{Addr: s.cfg.WebHookListen}
+		s.webHookSrv = &http.Server{Addr: s.cfg.WebHookListen}
 
 		go func() {
-			log.Printf("[DEBUG] Start listen %q", s.srv.Addr)
-			err = s.srv.ListenAndServe()
+			log.Printf("[INFO] Start listen %q", s.webHookSrv.Addr)
+			err = s.webHookSrv.ListenAndServe()
 			if err != http.ErrServerClosed {
 				log.Printf("[ERROR] Listen error: %v", err)
 			}
 		}()
 
-		err = waitHTTPServerStart(s.srv.Addr, 10)
+		err = waitHTTPServerStart(s.webHookSrv.Addr, 10)
 	} else {
 		log.Printf("[INFO] Set up LongPool")
 		u := tgbotapi.NewUpdate(0)
@@ -149,8 +152,8 @@ func (s *BotService) Init() error {
 	if err != nil {
 		return errors.Wrapf(err, "error inialize server")
 	}
-	for _, subapp := range s.subapps {
-		err = subapp.Init()
+	for _, sapp := range s.subapps {
+		err = sapp.Init()
 		if err != nil {
 			return errors.Wrapf(err, "error inialize subapp")
 		}
@@ -160,21 +163,40 @@ func (s *BotService) Init() error {
 
 // MainLoop starts handling messages, blocking
 func (s *BotService) MainLoop() {
-	for update := range s.updates {
+	s.mainLoopDone = make(chan struct{})
+
+	for cont := true; cont; {
+		var update tgbotapi.Update
+
+		select {
+		case update, cont = <-s.updates:
+			if !cont {
+				continue
+			}
+		case <-s.ctx.Done():
+			cont = false
+			continue
+		case <-time.After(time.Second):
+			continue
+		}
+
 		for _, sapp := range s.subapps {
-			cont, err := sapp.HandleUpdate(s.ctx, &update)
+			nextSubapp, err := sapp.HandleUpdate(s.ctx, &update)
 			if err != nil {
 				log.Printf("[WARN] Error during handling update %v", err)
 			}
-			if !cont {
+			if !nextSubapp {
 				break
 			}
 		}
 	}
+
+	log.Printf("[INFO] closing main loop")
+	close(s.mainLoopDone)
 }
 
 // Close service
-func (s *BotService) Close() (err error) {
+func (s *BotService) Close() error {
 	errs := &multierror.Error{}
 	if s.cfg == nil {
 		return errors.Errorf("close uninialized service")
@@ -182,17 +204,34 @@ func (s *BotService) Close() (err error) {
 	s.bot.StopReceivingUpdates()
 
 	if s.cfg.WebHookURL != "" {
-		_, err = s.bot.RemoveWebhook()
+		_, err := s.bot.RemoveWebhook()
 		errs = multierror.Append(errs, err)
-
 	}
 
-	if s.srv != nil {
-		err = s.srv.Close()
+	if s.webHookSrv != nil {
+		err := s.webHookSrv.Close()
 		errs = multierror.Append(errs, err)
 	}
 
 	s.ctxCancel()
 
-	return err
+	if s.mainLoopDone != nil {
+		select {
+		case <-s.mainLoopDone:
+			// ok
+		case <-time.After(time.Second * 5):
+			multierror.Append(errs, errors.Errorf("Main loop isn't finished"))
+		}
+	}
+
+	for _, sapp := range s.subapps {
+		if err := sapp.Close(); err != nil {
+			errs = multierror.Append(errs, errors.Wrapf(err, "error close subapp"))
+		}
+	}
+
+	err := s.store.Close()
+	errs = multierror.Append(errs, err)
+
+	return errs.ErrorOrNil()
 }
