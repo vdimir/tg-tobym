@@ -24,7 +24,7 @@ type VoteApp struct {
 type VoteAppConfig struct {
 }
 
-func NewVoteApp(bot *tgbotapi.BotAPI, store *store.Storage, cfg *VoteAppConfig) (*VoteApp, error) {
+func (cfg *VoteAppConfig) NewSubApp(bot *tgbotapi.BotAPI, store *store.Storage) (SubApp, error) {
 	return &VoteApp{
 		Bot:   bot,
 		Store: &VoteStore{Store: store},

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/pkg/errors"
 	"github.com/vdimir/tg-tobym/app/store"
 )
 
@@ -15,13 +14,7 @@ type SubApp interface {
 	Close() error
 }
 
-// NewSubApp creates new subapp based on config
-func NewSubApp(bot *tgbotapi.BotAPI, store *store.Storage, cfg interface{}) (SubApp, error) {
-	switch cfg := cfg.(type) {
-	case *VoteAppConfig:
-		return NewVoteApp(bot, store, cfg)
-	case *ShowVersionConfig:
-		return NewShowVersionApp(bot, store, cfg)
-	}
-	return nil, errors.Errorf("unknown subapp config")
+// Factory allows to create subapps
+type Factory interface {
+	NewSubApp(bot *tgbotapi.BotAPI, store *store.Storage) (SubApp, error)
 }

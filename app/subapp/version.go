@@ -17,7 +17,7 @@ type ShowVersionConfig struct {
 	Version string
 }
 
-func NewShowVersionApp(bot *tgbotapi.BotAPI, store *store.Storage, cfg *ShowVersionConfig) (*ShowVersion, error) {
+func (cfg *ShowVersionConfig) NewSubApp(bot *tgbotapi.BotAPI, store *store.Storage) (SubApp, error) {
 	return &ShowVersion{
 		bot:     bot,
 		Version: cfg.Version,

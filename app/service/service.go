@@ -69,13 +69,13 @@ func NewBotService(cfg *Config) (*BotService, error) {
 		ctxCancel:    ctxCancel,
 	}
 
-	subappConfigs := []interface{}{
+	subappConfigs := []subapp.Factory{
 		&subapp.VoteAppConfig{},
 		&subapp.ShowVersionConfig{Version: cfg.AppVersion},
 	}
 
 	for _, cfg := range subappConfigs {
-		sapp, err := subapp.NewSubApp(bot, store, cfg)
+		sapp, err := cfg.NewSubApp(bot, store)
 		if err != nil {
 			return srv, err
 		}
