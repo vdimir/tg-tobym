@@ -5,23 +5,11 @@ import (
 	"fmt"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/vdimir/tg-tobym/app/store"
 )
 
 type ShowVersion struct {
-	bot     *tgbotapi.BotAPI
+	Bot     *tgbotapi.BotAPI
 	Version string
-}
-
-type ShowVersionConfig struct {
-	Version string
-}
-
-func (cfg *ShowVersionConfig) NewSubApp(bot *tgbotapi.BotAPI, store *store.Storage) (SubApp, error) {
-	return &ShowVersion{
-		bot:     bot,
-		Version: cfg.Version,
-	}, nil
 }
 
 // Init setup ShowVersion
@@ -31,11 +19,11 @@ func (sapp *ShowVersion) Init() (err error) {
 
 // HandleUpdate processes event
 func (sapp *ShowVersion) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (cont bool, err error) {
-	if upd.Message != nil && (sapp.bot.IsMessageToMe(*upd.Message) || upd.Message.Chat.IsPrivate()) {
+	if upd.Message != nil && (sapp.Bot.IsMessageToMe(*upd.Message) || upd.Message.Chat.IsPrivate()) {
 		if cmd := upd.Message.Command(); cmd == "version" {
 			resp := tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("`%s`", sapp.Version))
 			resp.ParseMode = tgbotapi.ModeMarkdownV2
-			_, err = sapp.bot.Send(resp)
+			_, err = sapp.Bot.Send(resp)
 			return false, err
 		}
 	}

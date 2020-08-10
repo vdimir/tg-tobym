@@ -3,38 +3,41 @@ package service
 import (
 	"context"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/go-chi/chi"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
+	"github.com/vdimir/tg-tobym/app/common"
 	"github.com/vdimir/tg-tobym/app/store"
 	"github.com/vdimir/tg-tobym/app/subapp"
 )
 
 // Config provides configuration for BotService
 type Config struct {
-	Token         string
-	WebHookURL    string
-	WebHookListen string
-	Debug         bool
-	DataPath      string
-	BotClient     *http.Client
+	Token      string
+	WebAppURL  string
+	UseWebHook bool
+	Addr       string
+	Debug      bool
+	DataPath   string
+	BotClient  *http.Client
 
 	AppVersion string
 }
 
 // BotService contains common application data
 type BotService struct {
-	bot        *tgbotapi.BotAPI
-	cfg        *Config
-	store      *store.Storage
-	updates    tgbotapi.UpdatesChannel
-	webHookSrv *http.Server
-	subapps    []subapp.SubApp
+	bot       *tgbotapi.BotAPI
+	cfg       *Config
+	store     *store.Storage
+	updates   tgbotapi.UpdatesChannel
+	webSrv    *http.Server
+	subapps   []subapp.SubApp
+	rootRoute chi.Router
 
 	mainLoopDone chan (struct{})
 	ctx          context.Context
@@ -43,6 +46,9 @@ type BotService struct {
 
 // NewBotService creates BotService
 func NewBotService(cfg *Config) (*BotService, error) {
+	if cfg.WebAppURL == "" && cfg.UseWebHook {
+		return nil, errors.Errorf("url should be set for web hook")
+	}
 	store, err := store.NewStorage(cfg.DataPath)
 	if err != nil {
 		return nil, err
@@ -60,55 +66,54 @@ func NewBotService(cfg *Config) (*BotService, error) {
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	srv := &BotService{
-		bot:          bot,
-		cfg:          cfg,
-		store:        store,
-		subapps:      []subapp.SubApp{},
+		bot:   bot,
+		cfg:   cfg,
+		store: store,
+		subapps: []subapp.SubApp{
+			&subapp.VoteApp{
+				Bot:   bot,
+				Store: &subapp.VoteStore{Store: store},
+			},
+			&subapp.ShowVersion{
+				Bot:     bot,
+				Version: cfg.AppVersion,
+			}},
 		mainLoopDone: nil,
 		ctx:          ctx,
 		ctxCancel:    ctxCancel,
 	}
+	srv.rootRoute = srv.Routes()
 
-	subappConfigs := []subapp.Factory{
-		&subapp.VoteAppConfig{},
-		&subapp.ShowVersionConfig{Version: cfg.AppVersion},
+	webSubApps := []struct {
+		path string
+		app  subapp.WebApp
+	}{
+		{
+			path: "/notify",
+			app: &subapp.NotifierApp{
+				Bot:    bot,
+				Store:  &subapp.NotifierStore{Store: store},
+				AppURL: cfg.WebAppURL,
+			},
+		},
 	}
 
-	for _, cfg := range subappConfigs {
-		sapp, err := cfg.NewSubApp(bot, store)
-		if err != nil {
-			return srv, err
-		}
-		srv.subapps = append(srv.subapps, sapp)
+	for _, sapp := range webSubApps {
+		srv.rootRoute.Mount(sapp.path, sapp.app.Routes())
+		srv.subapps = append(srv.subapps, sapp.app)
 	}
 
 	return srv, nil
-}
-
-func waitHTTPServerStart(addr string, maxRetries int) error {
-	retries := 0
-	for range time.Tick(time.Second) {
-		retries++
-		conn, _ := net.DialTimeout("tcp", addr, time.Millisecond*10)
-		if conn != nil {
-			_ = conn.Close()
-			return nil
-		}
-		if retries > maxRetries {
-			return errors.Errorf("server not started")
-		}
-	}
-	return nil
 }
 
 // Init service, setup connection
 func (s *BotService) Init() error {
 	var err error
 
-	if s.cfg.WebHookURL != "" {
-		log.Printf("[INFO] Set up webhook for %s", s.cfg.WebHookURL)
+	if s.cfg.UseWebHook {
+		log.Printf("[INFO] Set up webhook for %s", s.cfg.WebAppURL)
 
-		webHookEndpoint := s.cfg.WebHookURL + "/" + s.bot.Token
+		webHookEndpoint := s.cfg.WebAppURL + "/" + s.bot.Token
 		_, err := url.Parse(webHookEndpoint)
 		if err != nil {
 			return errors.Wrapf(err, "wrong url")
@@ -126,28 +131,31 @@ func (s *BotService) Init() error {
 			log.Printf("[WARN] Telegram callback failed: %s", info.LastErrorMessage)
 		}
 
-		s.updates = s.bot.ListenForWebhook("/" + s.bot.Token)
+		s.updates = s.bot.ListenForWebhook("/_webhook/" + s.bot.Token)
 
-		if s.cfg.WebHookListen == "" {
-			return errors.Errorf("WebHookListen should be set if webHook used")
-		}
-		s.webHookSrv = &http.Server{Addr: s.cfg.WebHookListen}
-
-		go func() {
-			log.Printf("[INFO] Start listen %q", s.webHookSrv.Addr)
-			err = s.webHookSrv.ListenAndServe()
-			if err != http.ErrServerClosed {
-				log.Printf("[ERROR] Listen error: %v", err)
-			}
-		}()
-
-		err = waitHTTPServerStart(s.webHookSrv.Addr, 10)
 	} else {
-		log.Printf("[INFO] Set up LongPool")
+		log.Printf("[INFO] Set up long poll")
 		u := tgbotapi.NewUpdate(0)
 		u.Timeout = 60
 		s.updates, err = s.bot.GetUpdatesChan(u)
 	}
+
+	http.Handle("/", s.rootRoute)
+
+	if s.cfg.Addr == "" {
+		return errors.Errorf("Addr is not set")
+	}
+	s.webSrv = &http.Server{Addr: s.cfg.Addr}
+
+	go func() {
+		log.Printf("[INFO] Start listen %q", s.webSrv.Addr)
+		err = s.webSrv.ListenAndServe()
+		if err != http.ErrServerClosed {
+			log.Printf("[ERROR] Listen error: %v", err)
+		}
+	}()
+
+	err = common.WaitHTTPServerStart(s.webSrv.Addr, 10)
 
 	if err != nil {
 		return errors.Wrapf(err, "error inialize server")
@@ -164,6 +172,12 @@ func (s *BotService) Init() error {
 // MainLoop starts handling messages, blocking
 func (s *BotService) MainLoop() {
 	s.mainLoopDone = make(chan struct{})
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[ERROR] Ooops! MainLoop failed: %v", r)
+		}
+	}()
 
 	for cont := true; cont; {
 		var update tgbotapi.Update
@@ -203,13 +217,13 @@ func (s *BotService) Close() error {
 	}
 	s.bot.StopReceivingUpdates()
 
-	if s.cfg.WebHookURL != "" {
+	if s.cfg.UseWebHook {
 		_, err := s.bot.RemoveWebhook()
 		errs = multierror.Append(errs, err)
 	}
 
-	if s.webHookSrv != nil {
-		err := s.webHookSrv.Close()
+	if s.webSrv != nil {
+		err := s.webSrv.Close()
 		errs = multierror.Append(errs, err)
 	}
 

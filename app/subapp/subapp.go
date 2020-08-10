@@ -2,9 +2,9 @@ package subapp
 
 import (
 	"context"
+	"net/http"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/vdimir/tg-tobym/app/store"
 )
 
 // SubApp provides part of functionality for bot
@@ -14,7 +14,8 @@ type SubApp interface {
 	Close() error
 }
 
-// Factory allows to create subapps
-type Factory interface {
-	NewSubApp(bot *tgbotapi.BotAPI, store *store.Storage) (SubApp, error)
+// WebApp is a SubApp that shoould serve http
+type WebApp interface {
+	SubApp
+	Routes() http.Handler
 }

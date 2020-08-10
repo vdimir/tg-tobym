@@ -78,7 +78,7 @@ func (m *MockTelegramServer) RoundTrip(r *http.Request) (*http.Response, error) 
 			setBodyOk(resp, `{
 				"ok": true,
 				"result": {
-					"url": "https://example.com:8443/xxxxxx",
+					"url": "https://example.com/xxxxxx",
 					"has_custom_certificate": false,
 					"pending_update_count": 0,
 					"max_connections": 40
@@ -117,17 +117,18 @@ func setUp(t *testing.T) (botService *BotService, mockTg *MockTelegramServer, te
 	tmpDir, err := ioutil.TempDir("", "tobym_data")
 	require.NoError(t, err)
 
-	webHookPort := GetPort(t)
+	webPort := GetPort(t)
 
 	mockTg = mockTelegramServer(t)
 
 	botService, err = NewBotService(&Config{
-		Token:         "xxxx",
-		DataPath:      tmpDir,
-		WebHookURL:    fmt.Sprintf("https://example.com:8443"),
-		WebHookListen: fmt.Sprintf(":%d", webHookPort),
-		Debug:         true,
-		BotClient:     mockTg.Client,
+		Token:      "xxxx",
+		DataPath:   tmpDir,
+		WebAppURL:  fmt.Sprintf("https://example.com"),
+		Addr:       fmt.Sprintf(":%d", webPort),
+		Debug:      true,
+		BotClient:  mockTg.Client,
+		UseWebHook: true,
 	})
 
 	require.NoError(t, err)
@@ -193,10 +194,7 @@ func TestVoteSendMsg(t *testing.T) {
 		}
 	}`
 
-	webHookEndpoint := botService.cfg.WebHookListen
-	if webHookEndpoint[0] == ':' {
-		webHookEndpoint = "http://127.0.0.1" + webHookEndpoint + "/xxxx"
-	}
+	webHookEndpoint := "http://" + botService.cfg.Addr + "/_webhook/xxxx"
 	resp, err := http.Post(webHookEndpoint, "application/json", strings.NewReader(testMsg))
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)

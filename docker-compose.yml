@@ -17,6 +17,6 @@ services:
 
         environment:
             - BOT_TOKEN
-            - WEB_HOOK_URL
+            - WEB_APP_URL
         volumes:
             - ./var:/srv/var

@@ -19,14 +19,15 @@ var revision = "local"
 // Opts contains command-line options
 type Opts struct {
 	Bot struct {
-		Token         string
-		WebHookURL    string
-		WebHookListen string
-		Debug         bool
+		Token       string
+		UseLongPoll bool
+		Addr        string
+		Debug       bool
 	}
 	Store struct {
 		Path string
 	}
+	WebAppURL string
 }
 
 func overWriteWithEnv(value *string, envName string) {
@@ -38,16 +39,17 @@ func overWriteWithEnv(value *string, envName string) {
 
 func parseArgs() (Opts, error) {
 	var opts Opts
+	flag.StringVar(&opts.WebAppURL, "webapp", "", "url to serve webapp [$WEB_APP_URL]")
+	flag.StringVar(&opts.Store.Path, "data_path", "./var", "folder to store data")
 
 	flag.StringVar(&opts.Bot.Token, "token", "", "path to file with token [$BOT_TOKEN]")
-	flag.StringVar(&opts.Bot.WebHookURL, "webhook", "", "bot webhook url [$WEB_HOOK_URL]")
-	flag.StringVar(&opts.Bot.WebHookListen, "listen", ":8443", "bot listen on")
+	flag.StringVar(&opts.Bot.Addr, "listen", ":8443", "addres to listen web requests ")
+	flag.BoolVar(&opts.Bot.UseLongPoll, "longpoll", false, "use long polling instead of web hooks")
 	flag.BoolVar(&opts.Bot.Debug, "debug", false, "print all bot mesaages to log")
-	flag.StringVar(&opts.Store.Path, "data_path", "./var", "folder to store data")
 
 	flag.Parse()
 
-	overWriteWithEnv(&opts.Bot.WebHookURL, "WEB_HOOK_URL")
+	overWriteWithEnv(&opts.WebAppURL, "WEB_APP_URL")
 	return opts, nil
 }
 
@@ -88,11 +90,12 @@ func main() {
 	}
 
 	cfg := &service.Config{
-		Token:         token,
-		DataPath:      opts.Store.Path,
-		WebHookURL:    opts.Bot.WebHookURL,
-		WebHookListen: opts.Bot.WebHookListen,
-		Debug:         opts.Bot.Debug,
+		Token:      token,
+		DataPath:   opts.Store.Path,
+		WebAppURL:  opts.WebAppURL,
+		Addr:       opts.Bot.Addr,
+		Debug:      opts.Bot.Debug,
+		UseWebHook: !opts.Bot.UseLongPoll,
 
 		AppVersion: revision,
 	}

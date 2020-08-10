@@ -27,6 +27,10 @@ func NewStorage(folderPath string) (*Storage, error) {
 	}, nil
 }
 
+func (s *Storage) GetBucket(name string) storm.Node {
+	return s.DB.From(name)
+}
+
 // Close storage
 func (s *Storage) Close() error {
 	return s.DB.Close()
