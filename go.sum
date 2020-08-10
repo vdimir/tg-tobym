@@ -11,8 +11,6 @@ github.com/go-chi/chi v4.1.2+incompatible h1:fGFk2Gmi/YKXk0OmGfBh0WgmN3XB8lVnEyN
 github.com/go-chi/chi v4.1.2+incompatible/go.mod h1:eB3wogJHnLi3x/kFX2A+IbTBlXxmMeXJVKy9tTv1XzQ=
 github.com/go-chi/render v1.0.1 h1:4/5tis2cKaNdnv9zFLfXzcquC9HbeZgCnxGnKrltBS8=
 github.com/go-chi/render v1.0.1/go.mod h1:pq4Rr7HbnsdaeHagklXub+p6Wd16Af5l9koip1OvJns=
-github.com/go-pkgz/rest v1.5.0 h1:C8SxXcXza4GiUUAn/95iCkvoIrGbS30qpwK19iqlrWQ=
-github.com/go-pkgz/rest v1.5.0/go.mod h1:nQaM3RhSTUAmbBZWY4hfe4buyeC9VckvhoCktiQXJxI=
 github.com/go-telegram-bot-api/telegram-bot-api v1.0.1-0.20200729154208-fb8759e91dfc h1:4N4M0RFas9m30PaUYz+czoIqvmduqOW/xQ7rYXF3nNI=
 github.com/go-telegram-bot-api/telegram-bot-api v1.0.1-0.20200729154208-fb8759e91dfc/go.mod h1:lDm2E64X4OjFdBUA4hlN4mEvbSitvhJdKw7rsA8KHgI=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
