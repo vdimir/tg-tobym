@@ -112,8 +112,8 @@ func (s *BotService) Init() error {
 
 	if s.cfg.UseWebHook {
 		log.Printf("[INFO] Set up webhook for %s", s.cfg.WebAppURL)
-
-		webHookEndpoint := s.cfg.WebAppURL + "/" + s.bot.Token
+		webHookPath := "/_webhook/" + s.bot.Token
+		webHookEndpoint := s.cfg.WebAppURL + webHookPath
 		_, err := url.Parse(webHookEndpoint)
 		if err != nil {
 			return errors.Wrapf(err, "wrong url")
@@ -131,7 +131,7 @@ func (s *BotService) Init() error {
 			log.Printf("[WARN] Telegram callback failed: %s", info.LastErrorMessage)
 		}
 
-		s.updates = s.bot.ListenForWebhook("/_webhook/" + s.bot.Token)
+		s.updates = s.bot.ListenForWebhook(webHookPath)
 
 	} else {
 		log.Printf("[INFO] Set up long poll")
