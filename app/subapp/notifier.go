@@ -127,7 +127,7 @@ func (sapp *NotifierApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update)
 	msgToMe := sapp.Bot.IsMessageToMe(*upd.Message) || upd.Message.Chat.IsPrivate()
 	if cmd := upd.Message.Command(); msgToMe {
 		switch cmd {
-		case "newNotifyToken":
+		case "new_notify_token":
 			if token, err := sapp.generateToken(upd.Message.Chat.ID); err == nil {
 				resp := tgbotapi.NewMessage(upd.Message.Chat.ID, sapp.fomatTokenMsg(token))
 				resp.ParseMode = tgbotapi.ModeMarkdown
@@ -137,13 +137,13 @@ func (sapp *NotifierApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update)
 			} else {
 				return true, errors.Wrapf(err, "generate token error")
 			}
-		case "revokeNotifyToken":
-			err := sapp.rejectToken(upd.Message.Chat.ID)
+		case "revoke_notify_token":
+			err := sapp.revokeToken(upd.Message.Chat.ID)
 			var resp tgbotapi.MessageConfig
 			if err == nil {
-				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Token rejected"))
+				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Ok, token revoked"))
 			} else {
-				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Can't reject token"))
+				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Can't revoke token"))
 			}
 			_, err = sapp.Bot.Send(resp)
 			return false, err
@@ -166,7 +166,7 @@ func (sapp *NotifierApp) generateToken(chatID int64) (string, error) {
 	return token, err
 }
 
-func (sapp *NotifierApp) rejectToken(chatID int64) error {
+func (sapp *NotifierApp) revokeToken(chatID int64) error {
 	err := sapp.Store.SaveToken(chatID, "")
 	return err
 }
