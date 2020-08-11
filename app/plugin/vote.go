@@ -22,14 +22,14 @@ type VoteApp struct {
 }
 
 // HandleUpdate processes event
-func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (cont bool, err error) {
+func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (caught bool, err error) {
 	if upd.Message != nil {
 		err = vapp.handleMessage(upd.Message)
 	}
 	if upd.CallbackQuery != nil {
 		err = vapp.handleCallcackQuery(upd.CallbackQuery)
 	}
-	return true, err
+	return false, err
 }
 
 func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) bool {

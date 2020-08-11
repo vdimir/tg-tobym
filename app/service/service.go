@@ -100,7 +100,7 @@ func NewBotService(cfg *Config) (*BotService, error) {
 			path: "/notify",
 			app: &plugin.NotifierApp{
 				Bot:    bot,
-				Store:  &plugin.NotifierStore{Store: store},
+				Store:  &plugin.NotifierStore{Bkt: store.GetBucket("notifier")},
 				AppURL: cfg.WebAppURL,
 			},
 		},
@@ -220,11 +220,11 @@ func (s *BotService) mainLoop() {
 		}
 
 		for _, sapp := range s.plugins {
-			nextPlugin, err := sapp.HandleUpdate(s.ctx, &update)
+			eventCaught, err := sapp.HandleUpdate(s.ctx, &update)
 			if err != nil {
 				log.Printf("[WARN] Error during handling update %v", err)
 			}
-			if !nextPlugin {
+			if eventCaught {
 				break
 			}
 		}

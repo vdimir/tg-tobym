@@ -1,25 +1,42 @@
 package plugin
 
 import (
+	"github.com/asdine/storm/q"
 	"github.com/asdine/storm/v3"
-	"github.com/vdimir/tg-tobym/app/store"
+	"github.com/pkg/errors"
 )
 
-const notifierBucketName = "notifier"
-
 type NotifierStore struct {
-	Store *store.Storage
+	Bkt storm.Node
 }
 
 type chatToken struct {
-	ChatID int64  `storm:"id"`
-	Token  string `storm:"unique"`
+	Token  string `storm:"id"`
+	ChatID int64
 }
 
 func (s *NotifierStore) SaveToken(chatID int64, token string) error {
-	bkt := s.Store.GetBucket(notifierBucketName)
-	err := bkt.Save(&chatToken{ChatID: chatID, Token: token})
+	if token == "" {
+		return errors.Errorf("empty token")
+	}
+	err := s.Bkt.Save(&chatToken{Token: token, ChatID: chatID})
 	return err
+}
+
+func (s *NotifierStore) RemoveTokens(chatID int64, token string) (int, error) {
+	if token == "" {
+		err := s.Bkt.Select(q.Eq("ChatID", chatID)).Delete(&chatToken{})
+		if err == storm.ErrNotFound {
+			return 0, nil
+		}
+		// do not count number of deleted entries actually, say "more than one"
+		return 2, err
+	}
+	err := s.Bkt.DeleteStruct(&chatToken{Token: token, ChatID: chatID})
+	if err == storm.ErrNotFound {
+		return 0, nil
+	}
+	return 1, err
 }
 
 func (s *NotifierStore) FindToken(token string) int64 {
@@ -27,9 +44,8 @@ func (s *NotifierStore) FindToken(token string) int64 {
 		return 0
 	}
 
-	bkt := s.Store.GetBucket(notifierBucketName)
 	res := &chatToken{}
-	err := bkt.One("Token", token, res)
+	err := s.Bkt.One("Token", token, res)
 	if err == storm.ErrNotFound {
 		return 0
 	}

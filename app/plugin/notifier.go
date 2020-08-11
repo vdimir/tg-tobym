@@ -120,36 +120,50 @@ func (sapp *NotifierApp) fomatTokenMsg(token string) string {
 	return fmt.Sprintf("token: `%s` created.\nExample usage `%s`", token, cmd)
 }
 
+func (sapp *NotifierApp) Commands() []CommandDescription {
+	return []CommandDescription{
+		{
+			Cmd:     "notify_token",
+			Help:    "Create or revoke notify token for chat.",
+			Details: "To revoke token pass 'revoke' argument with token to revoke or without to revoke all ones.",
+		},
+	}
+}
+
 func (sapp *NotifierApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (bool, error) {
 	if upd.Message == nil {
-		return true, nil
+		return false, nil
 	}
 	msgToMe := sapp.Bot.IsMessageToMe(*upd.Message) || upd.Message.Chat.IsPrivate()
-	if cmd := upd.Message.Command(); msgToMe {
-		switch cmd {
-		case "new_notify_token":
-			if token, err := sapp.generateToken(upd.Message.Chat.ID); err == nil {
+	if cmd := upd.Message.Command(); msgToMe && cmd == "notify_token" {
+		if args := upd.Message.CommandArguments(); args == "" {
+			token, err := sapp.generateToken(upd.Message.Chat.ID)
+			if err == nil {
 				resp := tgbotapi.NewMessage(upd.Message.Chat.ID, sapp.fomatTokenMsg(token))
 				resp.ParseMode = tgbotapi.ModeMarkdown
 
 				_, err := sapp.Bot.Send(resp)
-				return false, err
-			} else {
-				return true, errors.Wrapf(err, "generate token error")
+				return true, err
 			}
-		case "revoke_notify_token":
-			err := sapp.revokeToken(upd.Message.Chat.ID)
+			return true, errors.Wrapf(err, "generate token error")
+		} else if strings.HasPrefix(args, "revoke") {
+			tokenToRevoke := strings.TrimSpace(strings.TrimPrefix(args, "revoke"))
+			revokedCnt, err := sapp.revokeTokens(upd.Message.Chat.ID, tokenToRevoke)
 			var resp tgbotapi.MessageConfig
-			if err == nil {
+			if err != nil {
+				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Can't revoke token"))
+			} else if revokedCnt == 0 {
+				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Not found"))
+			} else if revokedCnt == 1 {
 				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Ok, token revoked"))
 			} else {
-				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Can't revoke token"))
+				resp = tgbotapi.NewMessage(upd.Message.Chat.ID, fmt.Sprintf("Ok, all tokens revoked"))
 			}
 			_, err = sapp.Bot.Send(resp)
-			return false, err
+			return true, err
 		}
 	}
-	return true, nil
+	return false, nil
 }
 
 func (sapp *NotifierApp) Close() error {
@@ -166,7 +180,6 @@ func (sapp *NotifierApp) generateToken(chatID int64) (string, error) {
 	return token, err
 }
 
-func (sapp *NotifierApp) revokeToken(chatID int64) error {
-	err := sapp.Store.SaveToken(chatID, "")
-	return err
+func (sapp *NotifierApp) revokeTokens(chatID int64, token string) (int, error) {
+	return sapp.Store.RemoveTokens(chatID, token)
 }
