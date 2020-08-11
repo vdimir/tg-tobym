@@ -26,11 +26,15 @@ type Config struct {
 	DataPath   string
 	BotClient  *http.Client
 
-	AppVersion string
+	HTTPRootPath string
+	AppVersion   string
 }
 
 // BotService contains common application data
 type BotService struct {
+	MaxFailNum   int
+	HTTPRootPath string
+
 	bot       *tgbotapi.BotAPI
 	cfg       *Config
 	store     *store.Storage
@@ -42,6 +46,8 @@ type BotService struct {
 	mainLoopDone chan (struct{})
 	ctx          context.Context
 	ctxCancel    context.CancelFunc
+
+	failuresNumber int
 }
 
 // NewBotService creates BotService
@@ -66,6 +72,8 @@ func NewBotService(cfg *Config) (*BotService, error) {
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	srv := &BotService{
+		MaxFailNum: 10,
+
 		bot:   bot,
 		cfg:   cfg,
 		store: store,
@@ -140,7 +148,11 @@ func (s *BotService) Init() error {
 		s.updates, err = s.bot.GetUpdatesChan(u)
 	}
 
-	http.Handle("/", s.rootRoute)
+	if s.cfg.HTTPRootPath != "" {
+		http.Handle(s.cfg.HTTPRootPath, s.rootRoute)
+	} else {
+		http.Handle("/", s.rootRoute)
+	}
 
 	if s.cfg.Addr == "" {
 		return errors.Errorf("Addr is not set")
@@ -166,16 +178,29 @@ func (s *BotService) Init() error {
 			return errors.Wrapf(err, "error inialize subapp")
 		}
 	}
-	return err
+
+	go s.mainLoop()
+
+	return nil
 }
 
 // MainLoop starts handling messages, blocking
-func (s *BotService) MainLoop() {
+func (s *BotService) mainLoop() {
 	s.mainLoopDone = make(chan struct{})
+
+	defer func() {
+		log.Printf("[INFO] closing main loop")
+		close(s.mainLoopDone)
+		s.mainLoopDone = nil
+	}()
 
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[ERROR] Ooops! MainLoop failed: %v", r)
+			s.failuresNumber++
+			if s.MaxFailNum < 0 || s.failuresNumber < s.MaxFailNum {
+				go s.mainLoop()
+			}
 		}
 	}()
 
@@ -204,9 +229,6 @@ func (s *BotService) MainLoop() {
 			}
 		}
 	}
-
-	log.Printf("[INFO] closing main loop")
-	close(s.mainLoopDone)
 }
 
 // Close service
@@ -215,15 +237,20 @@ func (s *BotService) Close() error {
 	if s.cfg == nil {
 		return errors.Errorf("close uninialized service")
 	}
-	s.bot.StopReceivingUpdates()
 
-	if s.cfg.UseWebHook {
+	if s.bot != nil {
+		s.bot.StopReceivingUpdates()
+	}
+
+	if s.cfg.UseWebHook && s.bot != nil {
 		_, err := s.bot.RemoveWebhook()
 		errs = multierror.Append(errs, err)
 	}
+	s.bot = nil
 
 	if s.webSrv != nil {
 		err := s.webSrv.Close()
+		s.webSrv = nil
 		errs = multierror.Append(errs, err)
 	}
 
@@ -244,8 +271,11 @@ func (s *BotService) Close() error {
 		}
 	}
 
-	err := s.store.Close()
-	errs = multierror.Append(errs, err)
+	if s.store != nil {
+		err := s.store.Close()
+		errs = multierror.Append(errs, err)
+		s.store = nil
+	}
 
 	return errs.ErrorOrNil()
 }

@@ -115,9 +115,9 @@ func main() {
 		if err != nil {
 			log.Printf("[ERROR] Cannot close bot %v", err)
 		}
-	}()
+		log.Printf("[INFO] Service closed")
 
-	go botService.MainLoop()
+	}()
 
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)

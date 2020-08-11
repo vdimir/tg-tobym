@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,8 +13,11 @@ import (
 	"testing"
 	"time"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vdimir/tg-tobym/app/subapp"
 )
 
 // GetFreePort asks the kernel for a free open port that is ready to use.
@@ -113,7 +117,7 @@ func mockTelegramServer(t *testing.T) *MockTelegramServer {
 	return mock
 }
 
-func setUp(t *testing.T) (botService *BotService, mockTg *MockTelegramServer, tearDown func()) {
+func setUp(t *testing.T, botInitFn func(*BotService)) (botService *BotService, mockTg *MockTelegramServer, tearDown func()) {
 	tmpDir, err := ioutil.TempDir("", "tobym_data")
 	require.NoError(t, err)
 
@@ -122,16 +126,20 @@ func setUp(t *testing.T) (botService *BotService, mockTg *MockTelegramServer, te
 	mockTg = mockTelegramServer(t)
 
 	botService, err = NewBotService(&Config{
-		Token:      "xxxx",
-		DataPath:   tmpDir,
-		WebAppURL:  fmt.Sprintf("https://example.com"),
-		Addr:       fmt.Sprintf(":%d", webPort),
-		Debug:      true,
-		BotClient:  mockTg.Client,
-		UseWebHook: true,
+		Token:        uuid.NewV4().String(),
+		DataPath:     tmpDir,
+		WebAppURL:    fmt.Sprintf("https://example.com"),
+		Addr:         fmt.Sprintf(":%d", webPort),
+		Debug:        true,
+		BotClient:    mockTg.Client,
+		UseWebHook:   true,
+		HTTPRootPath: uuid.NewV4().String(),
 	})
 
 	require.NoError(t, err)
+	if botInitFn != nil {
+		botInitFn(botService)
+	}
 
 	err = botService.Init()
 	require.NoError(t, err)
@@ -144,11 +152,7 @@ func setUp(t *testing.T) (botService *BotService, mockTg *MockTelegramServer, te
 	return botService, mockTg, tearDown
 }
 
-func TestVoteSendMsg(t *testing.T) {
-	botService, mockTg, tearDown := setUp(t)
-	go botService.MainLoop()
-	defer tearDown()
-
+func sendVoteMsg(t *testing.T, webHookEndpoint string) {
 	testMsg := `{
 		"update_id": 617777777,
 		"message": {
@@ -194,10 +198,38 @@ func TestVoteSendMsg(t *testing.T) {
 		}
 	}`
 
-	webHookEndpoint := "http://" + botService.cfg.Addr + "/_webhook/xxxx"
 	resp, err := http.Post(webHookEndpoint, "application/json", strings.NewReader(testMsg))
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
+}
+
+func TestVoteSendMsg(t *testing.T) {
+	botService, mockTg, tearDown := setUp(t, nil)
+	defer tearDown()
+	webHookEndpoint := "http://" + botService.cfg.Addr + "/_webhook/" + botService.bot.Token
+	sendVoteMsg(t, webHookEndpoint)
+
 	time.Sleep(time.Millisecond * 100)
 	assert.Equal(t, 1, mockTg.SentMessages)
+	assert.Equal(t, 0, botService.failuresNumber)
+}
+
+type BrokenSubapp struct{ subapp.NopSubapp }
+
+func (sapp *BrokenSubapp) HandleUpdate(_ context.Context, _ *tgbotapi.Update) (bool, error) {
+	panic("broken")
+}
+
+func TestMainLoopPanic(t *testing.T) {
+	botService, mockTg, tearDown := setUp(t, func(bsrv *BotService) {
+		bsrv.subapps = append(bsrv.subapps, &BrokenSubapp{})
+	})
+	defer tearDown()
+
+	webHookEndpoint := "http://" + botService.cfg.Addr + "/_webhook/" + botService.bot.Token
+	sendVoteMsg(t, webHookEndpoint)
+
+	time.Sleep(time.Millisecond * 100)
+	assert.Equal(t, 1, mockTg.SentMessages)
+	assert.Equal(t, 1, botService.failuresNumber)
 }

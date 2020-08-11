@@ -19,3 +19,18 @@ type WebApp interface {
 	SubApp
 	Routes() http.Handler
 }
+
+// NopSubapp does nothing
+type NopSubapp struct{}
+
+func (sapp *NopSubapp) Init() (err error) {
+	return nil
+}
+
+func (sapp *NopSubapp) HandleUpdate(_ context.Context, _ *tgbotapi.Update) (bool, error) {
+	return true, nil
+}
+
+func (sapp *NopSubapp) Close() (err error) {
+	return nil
+}

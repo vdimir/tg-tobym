@@ -8,13 +8,9 @@ import (
 )
 
 type ShowVersion struct {
+	NopSubapp
 	Bot     *tgbotapi.BotAPI
 	Version string
-}
-
-// Init setup ShowVersion
-func (sapp *ShowVersion) Init() (err error) {
-	return nil
 }
 
 // HandleUpdate processes event
@@ -28,9 +24,4 @@ func (sapp *ShowVersion) HandleUpdate(ctx context.Context, upd *tgbotapi.Update)
 		}
 	}
 	return true, err
-}
-
-// Close shutdown ShowVersion
-func (sapp *ShowVersion) Close() (err error) {
-	return nil
 }

@@ -16,13 +16,9 @@ const voteCallbackDataDec = voteCallbackDataPrefix + "-"
 
 // VoteApp sends vote form for particular messages in chats
 type VoteApp struct {
+	NopSubapp
 	Bot   *tgbotapi.BotAPI
 	Store *VoteStore
-}
-
-// Init setup VoteApp
-func (vapp *VoteApp) Init() (err error) {
-	return nil
 }
 
 // HandleUpdate processes event
@@ -34,11 +30,6 @@ func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (co
 		err = vapp.handleCallcackQuery(upd.CallbackQuery)
 	}
 	return true, err
-}
-
-// Close shutdown VoteApp
-func (vapp *VoteApp) Close() (err error) {
-	return nil
 }
 
 func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) bool {
