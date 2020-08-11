@@ -1,4 +1,4 @@
-package subapp
+package plugin
 
 import (
 	"context"

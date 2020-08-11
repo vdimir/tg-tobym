@@ -1,4 +1,4 @@
-package subapp
+package plugin
 
 import (
 	"github.com/asdine/storm/v3"

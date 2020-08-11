@@ -1,4 +1,4 @@
-package subapp
+package plugin
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 )
 
 type ShowVersion struct {
-	NopSubapp
+	NopPlugin
 	Bot     *tgbotapi.BotAPI
 	Version string
 }

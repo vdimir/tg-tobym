@@ -17,7 +17,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vdimir/tg-tobym/app/subapp"
+	"github.com/vdimir/tg-tobym/app/plugin"
 )
 
 // GetFreePort asks the kernel for a free open port that is ready to use.
@@ -214,15 +214,15 @@ func TestVoteSendMsg(t *testing.T) {
 	assert.Equal(t, 0, botService.failuresNumber)
 }
 
-type BrokenSubapp struct{ subapp.NopSubapp }
+type BrokenPlugin struct{ plugin.NopPlugin }
 
-func (sapp *BrokenSubapp) HandleUpdate(_ context.Context, _ *tgbotapi.Update) (bool, error) {
+func (sapp *BrokenPlugin) HandleUpdate(_ context.Context, _ *tgbotapi.Update) (bool, error) {
 	panic("broken")
 }
 
 func TestMainLoopPanic(t *testing.T) {
 	botService, mockTg, tearDown := setUp(t, func(bsrv *BotService) {
-		bsrv.subapps = append(bsrv.subapps, &BrokenSubapp{})
+		bsrv.plugins = append(bsrv.plugins, &BrokenPlugin{})
 	})
 	defer tearDown()
 

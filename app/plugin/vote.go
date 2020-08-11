@@ -1,4 +1,4 @@
-package subapp
+package plugin
 
 import (
 	"context"
@@ -16,7 +16,7 @@ const voteCallbackDataDec = voteCallbackDataPrefix + "-"
 
 // VoteApp sends vote form for particular messages in chats
 type VoteApp struct {
-	NopSubapp
+	NopPlugin
 	Bot   *tgbotapi.BotAPI
 	Store *VoteStore
 }

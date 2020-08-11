@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	"github.com/vdimir/tg-tobym/app/common"
+	"github.com/vdimir/tg-tobym/app/plugin"
 	"github.com/vdimir/tg-tobym/app/store"
-	"github.com/vdimir/tg-tobym/app/subapp"
 )
 
 // Config provides configuration for BotService
@@ -40,7 +40,7 @@ type BotService struct {
 	store     *store.Storage
 	updates   tgbotapi.UpdatesChannel
 	webSrv    *http.Server
-	subapps   []subapp.SubApp
+	plugins   []plugin.PlugIn
 	rootRoute chi.Router
 
 	mainLoopDone chan (struct{})
@@ -77,12 +77,12 @@ func NewBotService(cfg *Config) (*BotService, error) {
 		bot:   bot,
 		cfg:   cfg,
 		store: store,
-		subapps: []subapp.SubApp{
-			&subapp.VoteApp{
+		plugins: []plugin.PlugIn{
+			&plugin.VoteApp{
 				Bot:   bot,
-				Store: &subapp.VoteStore{Store: store},
+				Store: &plugin.VoteStore{Store: store},
 			},
-			&subapp.ShowVersion{
+			&plugin.ShowVersion{
 				Bot:     bot,
 				Version: cfg.AppVersion,
 			}},
@@ -92,23 +92,23 @@ func NewBotService(cfg *Config) (*BotService, error) {
 	}
 	srv.rootRoute = srv.Routes()
 
-	webSubApps := []struct {
+	webPlugin := []struct {
 		path string
-		app  subapp.WebApp
+		app  plugin.WebApp
 	}{
 		{
 			path: "/notify",
-			app: &subapp.NotifierApp{
+			app: &plugin.NotifierApp{
 				Bot:    bot,
-				Store:  &subapp.NotifierStore{Store: store},
+				Store:  &plugin.NotifierStore{Store: store},
 				AppURL: cfg.WebAppURL,
 			},
 		},
 	}
 
-	for _, sapp := range webSubApps {
+	for _, sapp := range webPlugin {
 		srv.rootRoute.Mount(sapp.path, sapp.app.Routes())
-		srv.subapps = append(srv.subapps, sapp.app)
+		srv.plugins = append(srv.plugins, sapp.app)
 	}
 
 	return srv, nil
@@ -172,10 +172,10 @@ func (s *BotService) Init() error {
 	if err != nil {
 		return errors.Wrapf(err, "error inialize server")
 	}
-	for _, sapp := range s.subapps {
+	for _, sapp := range s.plugins {
 		err = sapp.Init()
 		if err != nil {
-			return errors.Wrapf(err, "error inialize subapp")
+			return errors.Wrapf(err, "error inialize plugin")
 		}
 	}
 
@@ -219,12 +219,12 @@ func (s *BotService) mainLoop() {
 			continue
 		}
 
-		for _, sapp := range s.subapps {
-			nextSubapp, err := sapp.HandleUpdate(s.ctx, &update)
+		for _, sapp := range s.plugins {
+			nextPlugin, err := sapp.HandleUpdate(s.ctx, &update)
 			if err != nil {
 				log.Printf("[WARN] Error during handling update %v", err)
 			}
-			if !nextSubapp {
+			if !nextPlugin {
 				break
 			}
 		}
@@ -265,9 +265,9 @@ func (s *BotService) Close() error {
 		}
 	}
 
-	for _, sapp := range s.subapps {
+	for _, sapp := range s.plugins {
 		if err := sapp.Close(); err != nil {
-			errs = multierror.Append(errs, errors.Wrapf(err, "error close subapp"))
+			errs = multierror.Append(errs, errors.Wrapf(err, "error close plugin"))
 		}
 	}
 
