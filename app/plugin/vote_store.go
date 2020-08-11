@@ -2,30 +2,36 @@ package plugin
 
 import (
 	"github.com/asdine/storm/v3"
-	"github.com/vdimir/tg-tobym/app/store"
 )
 
 type VoteStore struct {
-	Store *store.Storage
+	Bkt storm.Node
+}
+
+type msgID struct {
+	messageID int
+	chatID    int64
 }
 
 type MsgVote struct {
-	ID    int
+	ID    msgID `storm:"id"`
 	Users map[int]int
 }
 
-func (s *VoteStore) AddVote(userID int, messageID int, increment int) (*MsgVote, error) {
-	votesStore, err := s.Store.DB.From("votes").Begin(true)
+func (s *VoteStore) AddVote(userID int, chatID int64, messageID int, increment int) (*MsgVote, error) {
+	votesStore, err := s.Bkt.Begin(true)
 
 	if err != nil {
 		return nil, err
 	}
-	data := &MsgVote{}
+	data := &MsgVote{
+		ID: msgID{messageID: messageID, chatID: chatID},
+	}
 
-	err = votesStore.One("ID", messageID, data)
+	err = votesStore.One("ID", data.ID, data)
 	if err == storm.ErrNotFound {
 		data = &MsgVote{
-			ID: messageID,
+			ID: msgID{messageID: messageID, chatID: chatID},
 			Users: map[int]int{
 				userID: increment,
 			},

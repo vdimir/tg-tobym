@@ -67,7 +67,7 @@ func (vapp *VoteApp) updateVote(msg *tgbotapi.CallbackQuery) (info voteAggregate
 		increment = -1
 	}
 
-	votedMsg, err := vapp.Store.AddVote(msg.From.ID, voteMsgID, increment)
+	votedMsg, err := vapp.Store.AddVote(msg.From.ID, msg.Message.Chat.ID, voteMsgID, increment)
 
 	if err != nil {
 		return info, err
