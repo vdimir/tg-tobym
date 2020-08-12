@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,7 +45,7 @@ func GetPort(t *testing.T) int {
 
 type MockTelegramServer struct {
 	Client       *http.Client
-	SentMessages int
+	SentMessages int32
 }
 
 func (m *MockTelegramServer) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -103,7 +104,7 @@ func (m *MockTelegramServer) RoundTrip(r *http.Request) (*http.Response, error) 
 
 	if strings.HasSuffix(r.URL.Path, "/sendMessage") {
 		setBodyOk(resp, "")
-		m.SentMessages++
+		atomic.AddInt32(&m.SentMessages, 1)
 	}
 
 	return resp, nil
@@ -210,8 +211,8 @@ func TestVoteSendMsg(t *testing.T) {
 	sendVoteMsg(t, webHookEndpoint)
 
 	time.Sleep(time.Millisecond * 100)
-	assert.Equal(t, 1, mockTg.SentMessages)
-	assert.Equal(t, 0, botService.failuresNumber)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&mockTg.SentMessages))
+	assert.Equal(t, uint32(0), atomic.LoadUint32(&botService.failuresNumber))
 }
 
 type BrokenPlugin struct{ plugin.NopPlugin }
@@ -230,6 +231,6 @@ func TestMainLoopPanic(t *testing.T) {
 	sendVoteMsg(t, webHookEndpoint)
 
 	time.Sleep(time.Millisecond * 100)
-	assert.Equal(t, 1, mockTg.SentMessages)
-	assert.Equal(t, 1, botService.failuresNumber)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&mockTg.SentMessages))
+	assert.Equal(t, uint32(1), atomic.LoadUint32(&botService.failuresNumber))
 }

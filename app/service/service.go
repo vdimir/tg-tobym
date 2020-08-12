@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi"
@@ -14,6 +15,7 @@ import (
 	"github.com/vdimir/tg-tobym/app/common"
 	"github.com/vdimir/tg-tobym/app/plugin"
 	"github.com/vdimir/tg-tobym/app/store"
+	"golang.org/x/sync/semaphore"
 )
 
 // Config provides configuration for BotService
@@ -47,7 +49,9 @@ type BotService struct {
 	ctx          context.Context
 	ctxCancel    context.CancelFunc
 
-	failuresNumber int
+	sem *semaphore.Weighted
+
+	failuresNumber uint32
 }
 
 // NewBotService creates BotService
@@ -86,9 +90,10 @@ func NewBotService(cfg *Config) (*BotService, error) {
 				Bot:     bot,
 				Version: cfg.AppVersion,
 			}},
-		mainLoopDone: nil,
+		mainLoopDone: make(chan struct{}),
 		ctx:          ctx,
 		ctxCancel:    ctxCancel,
+		sem:          semaphore.NewWeighted(10),
 	}
 	srv.rootRoute = srv.Routes()
 
@@ -184,24 +189,23 @@ func (s *BotService) Init() error {
 	return nil
 }
 
+func (s *BotService) handleUpdate(update tgbotapi.Update) {
+	for _, sapp := range s.plugins {
+		eventCaught, err := sapp.HandleUpdate(s.ctx, &update)
+		if err != nil {
+			log.Printf("[WARN] Error during handling update %v", err)
+		}
+		if eventCaught {
+			return
+		}
+	}
+}
+
 // MainLoop starts handling messages, blocking
 func (s *BotService) mainLoop() {
-	s.mainLoopDone = make(chan struct{})
-
 	defer func() {
 		log.Printf("[INFO] closing main loop")
 		close(s.mainLoopDone)
-		s.mainLoopDone = nil
-	}()
-
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("[ERROR] Ooops! MainLoop failed: %v", r)
-			s.failuresNumber++
-			if s.MaxFailNum < 0 || s.failuresNumber < s.MaxFailNum {
-				go s.mainLoop()
-			}
-		}
 	}()
 
 	for cont := true; cont; {
@@ -219,15 +223,21 @@ func (s *BotService) mainLoop() {
 			continue
 		}
 
-		for _, sapp := range s.plugins {
-			eventCaught, err := sapp.HandleUpdate(s.ctx, &update)
-			if err != nil {
-				log.Printf("[WARN] Error during handling update %v", err)
-			}
-			if eventCaught {
-				break
-			}
+		err := s.sem.Acquire(s.ctx, 1)
+		if err != nil {
+			log.Printf("[ERROR] Error aquiring the semaphore %v", err)
+			continue
 		}
+		go func(update tgbotapi.Update) {
+			defer s.sem.Release(1)
+			defer func() {
+				if r := recover(); r != nil {
+					_ = atomic.AddUint32(&s.failuresNumber, 1)
+					log.Printf("[ERROR] Ooops! MainLoop failed: %v", r)
+				}
+			}()
+			s.handleUpdate(update)
+		}(update)
 	}
 }
 
@@ -256,13 +266,11 @@ func (s *BotService) Close() error {
 
 	s.ctxCancel()
 
-	if s.mainLoopDone != nil {
-		select {
-		case <-s.mainLoopDone:
-			// ok
-		case <-time.After(time.Second * 5):
-			multierror.Append(errs, errors.Errorf("Main loop isn't finished"))
-		}
+	select {
+	case <-s.mainLoopDone:
+		// ok
+	case <-time.After(time.Second * 5):
+		multierror.Append(errs, errors.Errorf("Main loop isn't finished"))
 	}
 
 	for _, sapp := range s.plugins {
