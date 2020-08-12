@@ -3,7 +3,6 @@ module github.com/vdimir/tg-tobym
 go 1.14
 
 require (
-	github.com/asdine/storm v2.1.2+incompatible
 	github.com/asdine/storm/v3 v3.2.1
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/render v1.0.1

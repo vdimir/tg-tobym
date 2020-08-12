@@ -1,8 +1,8 @@
 package plugin
 
 import (
-	"github.com/asdine/storm/q"
 	"github.com/asdine/storm/v3"
+	"github.com/asdine/storm/v3/q"
 	"github.com/pkg/errors"
 )
 
