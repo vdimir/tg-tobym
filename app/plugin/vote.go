@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -32,8 +33,17 @@ func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (ca
 	return false, err
 }
 
-func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) bool {
-	return msg.Photo != nil || (msg.Text == "#vote" && msg.ReplyToMessage != nil)
+func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) int {
+	isTriggerToOther := msg.Text == "#vote" && msg.ReplyToMessage != nil
+	if isTriggerToOther {
+		return msg.ReplyToMessage.MessageID
+	}
+
+	isForward := msg.ForwardFromChat != nil
+	if isForward {
+		return msg.MessageID
+	}
+	return 0
 }
 
 type voteAggregateMsgInfo struct {
@@ -67,18 +77,19 @@ func (vapp *VoteApp) updateVote(msg *tgbotapi.CallbackQuery) (info voteAggregate
 		increment = -1
 	}
 
-	votedMsg, err := vapp.Store.AddVote(msg.From.ID, msg.Message.Chat.ID, voteMsgID, increment)
+	votedMsg, err := vapp.Store.AddVote(msg.Message.Chat.ID, voteMsgID, msg.From.ID, increment)
 
 	if err != nil {
 		return info, err
 	}
 
 	for _, inc := range votedMsg.Users {
+		logit := 1.0 + math.Abs(float64(inc))
 		if inc > 0 {
-			info.Plus += inc
+			info.Plus += int(math.Log2(logit))
 		}
 		if inc < 0 {
-			info.Minus -= inc
+			info.Minus += int(math.Log2(logit))
 		}
 	}
 	return info, nil
@@ -109,13 +120,9 @@ func (vapp *VoteApp) handleCallcackQuery(msg *tgbotapi.CallbackQuery) error {
 }
 
 func (vapp *VoteApp) handleMessage(msg *tgbotapi.Message) (err error) {
-	if vapp.isVotable(msg) {
+	if msgID := vapp.isVotable(msg); msgID != 0 {
 		respMsg := tgbotapi.NewMessage(msg.Chat.ID, "let's vote it, guys")
-
-		respMsg.ReplyToMessageID = msg.MessageID
-		if msg.ReplyToMessage != nil {
-			respMsg.ReplyToMessageID = msg.ReplyToMessage.MessageID
-		}
+		respMsg.ReplyToMessageID = msgID
 
 		respMsg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 			voteAggregateMsgInfo{}.inlineKeyboardRow())

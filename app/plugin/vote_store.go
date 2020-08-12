@@ -9,8 +9,8 @@ type VoteStore struct {
 }
 
 type msgID struct {
-	messageID int
-	chatID    int64
+	MessageID int
+	ChatID    int64
 }
 
 type MsgVote struct {
@@ -18,20 +18,20 @@ type MsgVote struct {
 	Users map[int]int
 }
 
-func (s *VoteStore) AddVote(userID int, chatID int64, messageID int, increment int) (*MsgVote, error) {
+func (s *VoteStore) AddVote(chatID int64, messageID int, userID int, increment int) (*MsgVote, error) {
 	votesStore, err := s.Bkt.Begin(true)
 
 	if err != nil {
 		return nil, err
 	}
 	data := &MsgVote{
-		ID: msgID{messageID: messageID, chatID: chatID},
+		ID: msgID{MessageID: messageID, ChatID: chatID},
 	}
 
 	err = votesStore.One("ID", data.ID, data)
 	if err == storm.ErrNotFound {
 		data = &MsgVote{
-			ID: msgID{messageID: messageID, chatID: chatID},
+			ID: msgID{MessageID: messageID, ChatID: chatID},
 			Users: map[int]int{
 				userID: increment,
 			},
@@ -42,11 +42,13 @@ func (s *VoteStore) AddVote(userID int, chatID int64, messageID int, increment i
 			return nil, err
 		}
 	} else if err == nil {
-		data.Users[userID] += increment
-		err = votesStore.Update(data)
-		if err != nil {
-			votesStore.Rollback()
-			return nil, err
+		if data.Users[userID]*increment >= 0 {
+			data.Users[userID] += increment
+			err = votesStore.Update(data)
+			if err != nil {
+				votesStore.Rollback()
+				return nil, err
+			}
 		}
 	} else {
 		votesStore.Rollback()
