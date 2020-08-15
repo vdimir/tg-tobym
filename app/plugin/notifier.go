@@ -115,7 +115,7 @@ func (sapp *NotifierApp) handleWeb(w http.ResponseWriter, r *http.Request) {
 
 func (sapp *NotifierApp) fomatTokenMsg(token string) string {
 	cmd := fmt.Sprintf(
-		`echo -n "Hello 界" | curl -v -X POST --data-binary @- -H "Content-Type: text/plain; charset=utf-8" -H "Authorization: Bearer %s" "%s/notify"`,
+		`echo -n "Hello 界" | curl --data-binary @- -H "Content-Type: text/plain; charset=utf-8" -H "Authorization: Bearer %s" "%s/notify"`,
 		token, sapp.AppURL)
 	return fmt.Sprintf("token: `%s` created.\nExample usage `%s`", token, cmd)
 }

@@ -15,5 +15,5 @@ BOT_TOKEN=xxxx docker-compose up --build
 If bot wasn't shutdown gracefully:
 
 ```
-curl -X POST -H 'Content-Type: application/json' -H 'application/x-www-form-urlencoded' "https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook"
+curl -X POST -H 'Content-Type: application/json' "https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook"
 ```
