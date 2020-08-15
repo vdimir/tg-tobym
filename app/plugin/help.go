@@ -3,7 +3,6 @@ package plugin
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -25,7 +24,6 @@ func (plg *Help) formatHelpText(short bool, botName string) string {
 			lines = append(lines, cmd.Details)
 		}
 	}
-	log.Printf("[TRACE] help %v", strings.Join(lines, "\n"))
 	return strings.Join(lines, "\n")
 }
 

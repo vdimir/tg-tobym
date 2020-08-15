@@ -36,13 +36,13 @@ func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (ca
 }
 
 func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) int {
-	isTriggerToOther := msg.Text == "#vote" && msg.ReplyToMessage != nil
+	isTriggerToOther := msg.Text == "#vote" && msg.ReplyToMessage != nil && !msg.ReplyToMessage.From.IsBot
 	if isTriggerToOther {
 		return msg.ReplyToMessage.MessageID
 	}
 
-	isForward := msg.ForwardFromChat != nil
-	if isForward {
+	isSpecial := msg.ForwardFromChat != nil || msg.Photo != nil
+	if isSpecial {
 		return msg.MessageID
 	}
 
