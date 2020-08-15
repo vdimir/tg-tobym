@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 
+	"github.com/kyokomi/emoji"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/hashicorp/go-multierror"
 )
@@ -47,19 +49,32 @@ func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) int {
 }
 
 type voteAggregateMsgInfo struct {
-	Plus  int
-	Minus int
+	TotalUsers       int
+	CurrentUserTotal int
+	Plus             int
+	Minus            int
+	Modified         bool
+}
+
+func arrowSign(score int) string {
+	if score > 0 {
+		return emoji.Sprintf(":right_arrow_curving_up:")
+	}
+	if score < 0 {
+		return emoji.Sprintf(":right_arrow_curving_down:")
+	}
+	return ""
 }
 
 func (info voteAggregateMsgInfo) inlineKeyboardRow() []tgbotapi.InlineKeyboardButton {
-	plusText := "+"
+	plusText := arrowSign(+1)
 	if info.Plus > 0 {
-		plusText = fmt.Sprintf("+%d", info.Plus)
+		plusText = fmt.Sprintf("%s %d", plusText, info.Plus)
 	}
 
-	minusText := "-"
+	minusText := arrowSign(-1)
 	if info.Minus > 0 {
-		minusText = fmt.Sprintf("-%d", info.Minus)
+		minusText = fmt.Sprintf("%s %d", minusText, info.Minus)
 	}
 
 	return tgbotapi.NewInlineKeyboardRow(
@@ -68,30 +83,47 @@ func (info voteAggregateMsgInfo) inlineKeyboardRow() []tgbotapi.InlineKeyboardBu
 	)
 }
 
-func (vapp *VoteApp) updateVote(msg *tgbotapi.CallbackQuery) (info voteAggregateMsgInfo, err error) {
-	voteMsgID := msg.Message.ReplyToMessage.MessageID
-	increment := 0
-	if msg.Data == voteCallbackDataInc {
-		increment = 1
-	} else {
+func (vapp *VoteApp) calcScore(votes *MsgVote, userID int) (info voteAggregateMsgInfo) {
+	info.TotalUsers = len(votes.Users)
+
+	for uid, score := range votes.Users {
+		logit := 1.0 + math.Abs(float64(score))
+		delta := int(math.Log2(logit))
+		if uid == userID {
+			oldDelta := int(math.Log2(logit - 1.0))
+			info.Modified = delta != oldDelta
+
+			info.CurrentUserTotal = score
+		}
+		if score > 0 {
+			info.Plus += delta
+		} else if score < 0 {
+			info.Minus += delta
+		}
+	}
+	return info
+}
+
+func (vapp *VoteApp) updateVote(msg *tgbotapi.CallbackQuery) (voteAggregateMsgInfo, error) {
+	increment := 1
+	if msg.Data == voteCallbackDataDec {
 		increment = -1
 	}
 
-	votedMsg, err := vapp.Store.AddVote(msg.Message.Chat.ID, voteMsgID, msg.From.ID, increment)
+	msgID := MsgChatID{
+		MessageID: msg.Message.ReplyToMessage.MessageID,
+		ChatID:    msg.Message.Chat.ID,
+	}
 
+	userID := msg.From.ID
+	storeModified, votedMsg, err := vapp.Store.AddVote(msg.Message.Time(), msgID, userID, increment)
 	if err != nil {
-		return info, err
+		return voteAggregateMsgInfo{}, err
 	}
 
-	for _, inc := range votedMsg.Users {
-		logit := 1.0 + math.Abs(float64(inc))
-		if inc > 0 {
-			info.Plus += int(math.Log2(logit))
-		}
-		if inc < 0 {
-			info.Minus += int(math.Log2(logit))
-		}
-	}
+	info := vapp.calcScore(votedMsg, userID)
+	info.Modified = info.Modified && storeModified
+
 	return info, nil
 }
 
@@ -110,17 +142,37 @@ func (vapp *VoteApp) handleCallcackQuery(msg *tgbotapi.CallbackQuery) error {
 			msg.Message.Chat.ID, msg.Message.MessageID,
 			tgbotapi.NewInlineKeyboardMarkup(voteAgg.inlineKeyboardRow()),
 		)
-		_, err = vapp.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(msg.ID, "ok"))
+
+		text := emoji.Sprintf("%+d / %d", voteAgg.CurrentUserTotal, voteAgg.TotalUsers)
+		if voteAgg.Modified {
+			text = emoji.Sprintf("%s %s", arrowSign(voteAgg.CurrentUserTotal), text)
+		}
+
+		_, err = vapp.Bot.AnswerCallbackQuery(tgbotapi.NewCallback(msg.ID, text))
 		errs = multierror.Append(errs, err)
 
-		_, err = vapp.Bot.Send(replyMsg)
-		errs = multierror.Append(errs, err)
+		if voteAgg.Modified {
+			_, err = vapp.Bot.Send(replyMsg)
+			errs = multierror.Append(errs, err)
+		}
 	}
 	return errs.ErrorOrNil()
 }
 
 func (vapp *VoteApp) handleMessage(msg *tgbotapi.Message) (err error) {
 	if msgID := vapp.isVotable(msg); msgID != 0 {
+		msgChatID := MsgChatID{
+			MessageID: msgID,
+			ChatID:    msg.Chat.ID,
+		}
+		if has, err := vapp.Store.HasVote(msgChatID); has {
+			respMsg := tgbotapi.NewMessage(msg.Chat.ID, "Already exists")
+			_, err = vapp.Bot.Send(respMsg)
+			return err
+		} else if err != nil {
+			return err
+		}
+
 		respMsg := tgbotapi.NewMessage(msg.Chat.ID, "let's vote it, guys")
 		respMsg.ReplyToMessageID = msgID
 

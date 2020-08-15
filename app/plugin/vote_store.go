@@ -1,59 +1,88 @@
 package plugin
 
 import (
+	"sync"
+	"time"
+
 	"github.com/asdine/storm/v3"
 )
 
-type VoteStore struct {
-	Bkt storm.Node
-}
-
-type msgID struct {
+type MsgChatID struct {
 	MessageID int
 	ChatID    int64
 }
 
-type MsgVote struct {
-	ID    msgID `storm:"id"`
-	Users map[int]int
+type VoteStore struct {
+	Bkt        storm.Node
+	perChatMtx sync.Map
 }
 
-func (s *VoteStore) AddVote(chatID int64, messageID int, userID int, increment int) (*MsgVote, error) {
-	votesStore, err := s.Bkt.Begin(true)
+type MsgVote struct {
+	ID        MsgChatID `storm:"id"`
+	Timestamp int64
+	Users     map[int]int
+}
 
-	if err != nil {
-		return nil, err
+func NewVoteStore(bkt storm.Node) *VoteStore {
+	return &VoteStore{
+		Bkt: bkt,
 	}
+}
+
+func (s *VoteStore) lockChat(msg MsgChatID) *sync.RWMutex {
+	lk, ok := s.perChatMtx.Load(msg.ChatID)
+	if !ok {
+		lk, _ = s.perChatMtx.LoadOrStore(msg.ChatID, new(sync.RWMutex))
+	}
+	return lk.(*sync.RWMutex)
+}
+
+func (s *VoteStore) HasVote(msg MsgChatID) (bool, error) {
+	lk := s.lockChat(msg)
+	lk.RLock()
+	defer lk.RUnlock()
+
+	data := &MsgVote{ID: msg}
+	err := s.Bkt.One("ID", data.ID, data)
+
+	if err == nil {
+		return true, nil
+	} else if err == storm.ErrNotFound {
+		return false, nil
+	}
+	return false, err
+}
+
+func (s *VoteStore) newVote(ts time.Time, msg MsgChatID, userID int, increment int) (*MsgVote, error) {
 	data := &MsgVote{
-		ID: msgID{MessageID: messageID, ChatID: chatID},
+		ID: msg,
+		Users: map[int]int{
+			userID: increment,
+		},
+		Timestamp: ts.Unix(),
 	}
+	err := s.Bkt.Save(data)
+	return data, err
+}
 
-	err = votesStore.One("ID", data.ID, data)
+func (s *VoteStore) AddVote(ts time.Time, msg MsgChatID, userID int, increment int) (bool, *MsgVote, error) {
+	lk := s.lockChat(msg)
+	lk.Lock()
+	defer lk.Unlock()
+
+	data := &MsgVote{ID: msg}
+	err := s.Bkt.One("ID", data.ID, data)
+
 	if err == storm.ErrNotFound {
-		data = &MsgVote{
-			ID: msgID{MessageID: messageID, ChatID: chatID},
-			Users: map[int]int{
-				userID: increment,
-			},
-		}
-		err = votesStore.Save(data)
-		if err != nil {
-			votesStore.Rollback()
-			return nil, err
-		}
+		r, err := s.newVote(ts, msg, userID, increment)
+		return true, r, err
 	} else if err == nil {
 		if data.Users[userID]*increment >= 0 {
 			data.Users[userID] += increment
-			err = votesStore.Update(data)
-			if err != nil {
-				votesStore.Rollback()
-				return nil, err
-			}
+			err = s.Bkt.Update(data)
+			return true, data, nil
 		}
-	} else {
-		votesStore.Rollback()
-		return nil, err
+		return false, data, nil
 	}
-
-	return data, votesStore.Commit()
+	return false, data, err
 }

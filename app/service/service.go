@@ -84,7 +84,7 @@ func NewBotService(cfg *Config) (*BotService, error) {
 		plugins: []plugin.PlugIn{
 			&plugin.VoteApp{
 				Bot:   bot,
-				Store: &plugin.VoteStore{Bkt: store.GetBucket("votes")},
+				Store: plugin.NewVoteStore(store.GetBucket("votes")),
 			},
 			&plugin.ShowVersion{
 				Bot:     bot,

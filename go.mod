@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/go-telegram-bot-api/telegram-bot-api v1.0.1-0.20200729154208-fb8759e91dfc
 	github.com/hashicorp/go-multierror v1.1.0
+	github.com/kyokomi/emoji v2.2.4+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.3.0
