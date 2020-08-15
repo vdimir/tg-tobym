@@ -13,6 +13,14 @@ type ShowVersion struct {
 	Version string
 }
 
+func (plg *ShowVersion) Commands() []CommandDescription {
+	return []CommandDescription{{
+		Cmd:     "version",
+		Help:    "Show version (CommitHash-Date_Time)",
+		Details: "",
+	}}
+}
+
 // HandleUpdate processes event
 func (sapp *ShowVersion) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (caught bool, err error) {
 	if upd.Message != nil && (sapp.Bot.IsMessageToMe(*upd.Message) || upd.Message.Chat.IsPrivate()) {

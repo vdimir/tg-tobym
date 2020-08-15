@@ -130,7 +130,7 @@ func setUp(t *testing.T, botInitFn func(*BotService)) (botService *BotService, m
 		Token:        uuid.NewV4().String(),
 		DataPath:     tmpDir,
 		WebAppURL:    fmt.Sprintf("https://example.com"),
-		Addr:         fmt.Sprintf(":%d", webPort),
+		Addr:         fmt.Sprintf("127.0.0.1:%d", webPort),
 		Debug:        true,
 		BotClient:    mockTg.Client,
 		UseWebHook:   true,

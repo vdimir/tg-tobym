@@ -127,6 +127,16 @@ func setupPlugins(srv *BotService) {
 		srv.rootRoute.Mount(sapp.path, sapp.app.Routes())
 		srv.plugins = append(srv.plugins, sapp.app)
 	}
+
+	helpPlugin := &plugin.Help{
+		Bot:  srv.bot,
+		Cmds: []plugin.CommandDescription{},
+	}
+	srv.plugins = append(srv.plugins, helpPlugin)
+
+	for _, p := range srv.plugins {
+		helpPlugin.Cmds = append(helpPlugin.Cmds, p.Commands()...)
+	}
 }
 
 // Init service, setup connection

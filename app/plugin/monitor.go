@@ -54,7 +54,7 @@ func (plg *Monitor) notifySubscibersOnStartup() {
 		}
 
 		if s.Subscribed && s.ChatID != 0 {
-			err := common.SentTextMessage(plg.Bot, s.ChatID, "Hello! I'm awake! You may send /version to me.")
+			err := common.SentTextMessage(plg.Bot, s.ChatID, "Hello! I'm awake! You may send /version to me.", "")
 			if err != nil {
 				log.Printf("[ERROR] cannot send message to subscriber: %v", err)
 			}
@@ -93,7 +93,7 @@ func (plg *Monitor) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (boo
 		if !enable {
 			text = "Unsubscibed :ok_hand:"
 		}
-		err = common.ReplyWithText(plg.Bot, upd.Message, text)
+		err = common.ReplyWithText(plg.Bot, upd.Message, text, tgbotapi.ModeMarkdown)
 		return true, err
 	}
 	return false, nil
