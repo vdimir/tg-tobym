@@ -78,24 +78,36 @@ func NewBotService(cfg *Config) (*BotService, error) {
 	srv := &BotService{
 		MaxFailNum: 10,
 
-		bot:   bot,
-		cfg:   cfg,
-		store: store,
-		plugins: []plugin.PlugIn{
-			&plugin.VoteApp{
-				Bot:   bot,
-				Store: plugin.NewVoteStore(store.GetBucket("votes")),
-			},
-			&plugin.ShowVersion{
-				Bot:     bot,
-				Version: cfg.AppVersion,
-			}},
+		bot:          bot,
+		cfg:          cfg,
+		store:        store,
+		plugins:      []plugin.PlugIn{},
 		mainLoopDone: make(chan struct{}),
 		ctx:          ctx,
 		ctxCancel:    ctxCancel,
 		sem:          semaphore.NewWeighted(10),
 	}
 	srv.rootRoute = srv.Routes()
+	setupPlugins(srv)
+
+	return srv, nil
+}
+
+func setupPlugins(srv *BotService) {
+	srv.plugins = []plugin.PlugIn{
+		&plugin.VoteApp{
+			Bot:   srv.bot,
+			Store: plugin.NewVoteStore(srv.store.GetBucket("votes")),
+		},
+		&plugin.ShowVersion{
+			Bot:     srv.bot,
+			Version: srv.cfg.AppVersion,
+		},
+		&plugin.Monitor{
+			Bot:   srv.bot,
+			Store: srv.store.GetBucket("service_subscribers"),
+		},
+	}
 
 	webPlugin := []struct {
 		path string
@@ -104,9 +116,9 @@ func NewBotService(cfg *Config) (*BotService, error) {
 		{
 			path: "/notify",
 			app: &plugin.NotifierApp{
-				Bot:    bot,
-				Store:  &plugin.NotifierStore{Bkt: store.GetBucket("notifier")},
-				AppURL: cfg.WebAppURL,
+				Bot:    srv.bot,
+				Store:  &plugin.NotifierStore{Bkt: srv.store.GetBucket("notifier")},
+				AppURL: srv.cfg.WebAppURL,
 			},
 		},
 	}
@@ -115,8 +127,6 @@ func NewBotService(cfg *Config) (*BotService, error) {
 		srv.rootRoute.Mount(sapp.path, sapp.app.Routes())
 		srv.plugins = append(srv.plugins, sapp.app)
 	}
-
-	return srv, nil
 }
 
 // Init service, setup connection
