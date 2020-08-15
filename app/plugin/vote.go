@@ -45,6 +45,11 @@ func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) int {
 	if isForward {
 		return msg.MessageID
 	}
+
+	containsHash := strings.Contains(msg.Text, "#vote") && len(msg.Text) > 5 && msg.ReplyToMessage == nil
+	if containsHash {
+		return msg.MessageID
+	}
 	return 0
 }
 
