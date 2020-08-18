@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -66,7 +67,7 @@ func (sapp *NotifierApp) handleWeb(w http.ResponseWriter, r *http.Request) {
 		text = r.URL.Query().Get("text")
 	case "POST":
 		reqBody, err := ioutil.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
-		if err != nil {
+		if err != nil && err != io.EOF {
 			render.Status(r, http.StatusBadRequest)
 			render.JSON(w, r, common.JSON{"error": "can't read body"})
 			return
