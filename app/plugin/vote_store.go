@@ -19,7 +19,8 @@ type VoteStore struct {
 
 type MsgVote struct {
 	ID        MsgChatID `storm:"id"`
-	Timestamp int64
+	Timestamp int64     `storm:"index"`
+	Author    int
 	Users     map[int]int
 }
 
@@ -53,12 +54,15 @@ func (s *VoteStore) HasVote(msg MsgChatID) (bool, error) {
 	return false, err
 }
 
-func (s *VoteStore) newVote(ts time.Time, msg MsgChatID, userID int, increment int) (*MsgVote, error) {
+func (s *VoteStore) NewVote(ts time.Time, msg MsgChatID, userID int) (*MsgVote, error) {
+	lk := s.lockChat(msg)
+	lk.Lock()
+	defer lk.Unlock()
+
 	data := &MsgVote{
-		ID: msg,
-		Users: map[int]int{
-			userID: increment,
-		},
+		ID:        msg,
+		Users:     map[int]int{},
+		Author:    userID,
 		Timestamp: ts.Unix(),
 	}
 	err := s.Bkt.Save(data)
@@ -73,16 +77,12 @@ func (s *VoteStore) AddVote(ts time.Time, msg MsgChatID, userID int, increment i
 	data := &MsgVote{ID: msg}
 	err := s.Bkt.One("ID", data.ID, data)
 
-	if err == storm.ErrNotFound {
-		r, err := s.newVote(ts, msg, userID, increment)
-		return true, r, err
-	} else if err == nil {
+	if err != nil {
 		if data.Users[userID]*increment >= 0 {
 			data.Users[userID] += increment
 			err = s.Bkt.Update(data)
 			return true, data, nil
 		}
-		return false, data, nil
 	}
 	return false, data, err
 }
