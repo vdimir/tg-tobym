@@ -1,10 +1,13 @@
 package plugin
 
 import (
+	"log"
 	"sync"
 	"time"
 
 	"github.com/asdine/storm/v3"
+	"github.com/asdine/storm/v3/q"
+	"github.com/pkg/errors"
 )
 
 type MsgChatID struct {
@@ -25,6 +28,9 @@ type MsgVote struct {
 }
 
 func NewVoteStore(bkt storm.Node) *VoteStore {
+	err := bkt.ReIndex(&MsgVote{})
+	log.Printf("[WARN]  Reindex vote store, Err: %v", err)
+
 	return &VoteStore{
 		Bkt: bkt,
 	}
@@ -77,12 +83,34 @@ func (s *VoteStore) AddVote(ts time.Time, msg MsgChatID, userID int, increment i
 	data := &MsgVote{ID: msg}
 	err := s.Bkt.One("ID", data.ID, data)
 
-	if err != nil {
+	log.Printf("[TRACE] >> %v %v %v %v", msg, userID, increment, err)
+	log.Printf("[TRACE] > %v", data)
+
+	if err == nil {
+		log.Printf("[TRACE] > data.Users[userID]*increment %v", data.Users[userID]*increment)
+
 		if data.Users[userID]*increment >= 0 {
 			data.Users[userID] += increment
+			log.Printf("[TRACE] > data.Users[userID] %v", data.Users[userID])
+
 			err = s.Bkt.Update(data)
-			return true, data, nil
+			return true, data, err
 		}
 	}
 	return false, data, err
+}
+
+func (s *VoteStore) Stat(ts time.Time, msg MsgChatID, fn func(*MsgVote)) error {
+	lk := s.lockChat(msg)
+	lk.RLock()
+	defer lk.RUnlock()
+	query := s.Bkt.Select(q.Eq("ID", msg), q.Gt("Timestamp", ts))
+
+	err := query.Each(&MsgVote{}, func(val interface{}) error {
+		if vote, ok := val.(*MsgVote); ok {
+			fn(vote)
+		}
+		return errors.Errorf("`val` is mot MsgVote, but %v", val)
+	})
+	return err
 }

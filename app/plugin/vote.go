@@ -2,12 +2,15 @@ package plugin
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/kyokomi/emoji"
+	"github.com/pkg/errors"
+	"github.com/vdimir/tg-tobym/app/common"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/hashicorp/go-multierror"
@@ -34,6 +37,13 @@ func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (ca
 		err = vapp.handleCallcackQuery(upd.CallbackQuery)
 	}
 	return false, err
+}
+
+func (_ *VoteApp) Commands() []CommandDescription {
+	return []CommandDescription{{
+		Cmd:  "vote_stat",
+		Help: "Show statisitcs",
+	}}
 }
 
 func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) int {
@@ -72,6 +82,12 @@ type voteAggregateMsgInfo struct {
 	Modified         bool
 }
 
+type voteStat struct {
+	TopVoters     []int
+	TopCreators   []int
+	WorstCreators []int
+}
+
 func arrowSign(score int) string {
 	if score > 0 {
 		return emoji.Sprintf(":right_arrow_curving_up:")
@@ -99,14 +115,18 @@ func (info voteAggregateMsgInfo) inlineKeyboardRow() []tgbotapi.InlineKeyboardBu
 	)
 }
 
-func (vapp *VoteApp) calcScore(votes *MsgVote, userID int) (info voteAggregateMsgInfo) {
+func smoothScore(score int) int {
+	logit := 1.0 + math.Abs(float64(score))
+	return int(math.Log2(logit))
+}
+
+func calcScore(votes *MsgVote, userID int) (info voteAggregateMsgInfo) {
 	info.TotalUsers = len(votes.Users)
 
 	for uid, score := range votes.Users {
-		logit := 1.0 + math.Abs(float64(score))
-		delta := int(math.Log2(logit))
+		delta := smoothScore(score)
 		if uid == userID {
-			oldDelta := int(math.Log2(logit - 1.0))
+			oldDelta := smoothScore(score - 1)
 			info.Modified = delta != oldDelta
 
 			info.CurrentUserTotal = score
@@ -133,11 +153,13 @@ func (vapp *VoteApp) updateVote(msg *tgbotapi.CallbackQuery) (voteAggregateMsgIn
 
 	userID := msg.From.ID
 	storeModified, votedMsg, err := vapp.Store.AddVote(msg.Message.Time(), msgID, userID, increment)
+
 	if err != nil {
 		return voteAggregateMsgInfo{}, err
 	}
 
-	info := vapp.calcScore(votedMsg, userID)
+	info := calcScore(votedMsg, userID)
+	log.Printf("[TRACE] calcScore: %v ", info)
 	info.Modified = info.Modified && storeModified
 
 	return info, nil
@@ -175,6 +197,61 @@ func (vapp *VoteApp) handleCallcackQuery(msg *tgbotapi.CallbackQuery) error {
 	return errs.ErrorOrNil()
 }
 
+type userScorePair struct {
+	User  int
+	Score int
+}
+
+type userScoreList []userScorePair
+
+func (p userScoreList) Len() int           { return len(p) }
+func (p userScoreList) Less(i, j int) bool { return p[i].Score > p[j].Score }
+func (p userScoreList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+func mapToUserScoreList(m map[int]int) userScoreList {
+	res := make(userScoreList, len(m))
+	for user, score := range m {
+		res = append(res, userScorePair{User: user, Score: score})
+	}
+	return res
+}
+
+func (vapp *VoteApp) calcStat(startTs time.Time, msgChatID MsgChatID) (voteStat, error) {
+	authorScores := map[int]int{}
+	votersStat := map[int]int{}
+
+	vapp.Store.Stat(startTs, msgChatID, func(votedMsg *MsgVote) {
+		info := calcScore(votedMsg, 0)
+		authorScores[votedMsg.Author] += info.Plus - info.Minus
+
+		for user, logit := range votedMsg.Users {
+			votersStat[user] += smoothScore(logit)
+		}
+	})
+
+	stat := voteStat{}
+
+	authorScoresArr := mapToUserScoreList(authorScores)
+
+	n := len(authorScoresArr)
+	for i := 0; i < len(authorScoresArr); i++ {
+		if authorScoresArr[i].Score == authorScoresArr[0].Score {
+			stat.TopCreators = append(stat.TopCreators, authorScoresArr[i].User)
+		}
+		if authorScoresArr[n-i-1].Score == authorScoresArr[n-1].Score {
+			stat.WorstCreators = append(stat.TopCreators, authorScoresArr[n-i-1].User)
+		}
+	}
+
+	votersStatArr := mapToUserScoreList(votersStat)
+	for i := 0; i < len(votersStatArr); i++ {
+		if votersStatArr[i].Score == votersStatArr[0].Score {
+			stat.TopVoters = append(stat.TopVoters, votersStatArr[i].User)
+		}
+	}
+	return stat, nil
+}
+
 func (vapp *VoteApp) handleMessage(msg *tgbotapi.Message) (err error) {
 	if msgID := vapp.isVotable(msg); msgID != 0 {
 		msgChatID := MsgChatID{
@@ -196,6 +273,27 @@ func (vapp *VoteApp) handleMessage(msg *tgbotapi.Message) (err error) {
 		respMsg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 			voteAggregateMsgInfo{}.inlineKeyboardRow())
 		_, err = vapp.Bot.Send(respMsg)
+		return err
 	}
-	return err
+
+	if common.CommandToBot(vapp.Bot, msg) == "vote_stat" {
+		msgChatID := MsgChatID{
+			MessageID: msg.MessageID,
+			ChatID:    msg.Chat.ID,
+		}
+		startTs := msg.Time().AddDate(0, 0, -15)
+		stat, err := vapp.calcStat(startTs, msgChatID)
+		if err != nil {
+			return errors.Wrapf(err, "calc stat error")
+		}
+
+		text := fmt.Sprintf("[TRACE] stat: %v", stat)
+
+		err = common.SentTextMessage(vapp.Bot, msg.Chat.ID, text, "")
+		if err != nil {
+			return errors.Wrapf(err, "message send error")
+		}
+		return err
+	}
+	return nil
 }

@@ -24,3 +24,11 @@ func ReplyWithText(bot *tgbotapi.BotAPI, msg *tgbotapi.Message, text string, par
 	}
 	return SentTextMessage(bot, msg.Chat.ID, text, parseMode)
 }
+
+func CommandToBot(bot *tgbotapi.BotAPI, msg *tgbotapi.Message) string {
+	msgToMe := bot.IsMessageToMe(*msg) || (msg.Chat != nil && msg.Chat.IsPrivate())
+	if msgToMe {
+		return msg.Command()
+	}
+	return ""
+}
