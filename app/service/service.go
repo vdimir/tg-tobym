@@ -94,13 +94,10 @@ func NewBotService(cfg *Config) (*BotService, error) {
 }
 
 func setupPlugins(srv *BotService) {
-	statPlugin := &plugin.LastMessage{}
 	srv.plugins = []plugin.PlugIn{
-		statPlugin,
 		&plugin.VoteApp{
 			Bot:   srv.bot,
 			Store: plugin.NewVoteStore(srv.store.GetBucket("votes")),
-			Stat:  statPlugin,
 		},
 		&plugin.ShowVersion{
 			Bot:     srv.bot,
