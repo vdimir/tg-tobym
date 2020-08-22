@@ -22,6 +22,7 @@ type VoteApp struct {
 	NopPlugin
 	Bot   *tgbotapi.BotAPI
 	Store *VoteStore
+	Stat  *LastMessage
 }
 
 // HandleUpdate processes event
@@ -36,14 +37,24 @@ func (vapp *VoteApp) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) (ca
 }
 
 func (vapp *VoteApp) isVotable(msg *tgbotapi.Message) int {
-	isTriggerToOther := msg.Text == "#vote" && msg.ReplyToMessage != nil && !msg.ReplyToMessage.From.IsBot
+	if msg.From == nil {
+		return 0
+	}
+	isReply := msg.ReplyToMessage != nil
+
+	isTriggerToOther := msg.Text == "#vote" && isReply && !msg.ReplyToMessage.From.IsBot
+
 	if isTriggerToOther {
 		return msg.ReplyToMessage.MessageID
 	}
 
-	isSpecial := msg.ForwardFromChat != nil || msg.Photo != nil
-	if isSpecial {
-		return msg.MessageID
+	if msg.Text == "#vote" && !isReply {
+		msg := vapp.Stat.Select(msg.Chat.ID, func(msg *tgbotapi.Message) bool {
+			return !strings.Contains(msg.Text, "#vote") && !msg.IsCommand()
+		})
+		if msg != nil {
+			return msg.MessageID
+		}
 	}
 
 	containsHash := strings.Contains(msg.Text, "#vote") && len(msg.Text) > 5 && msg.ReplyToMessage == nil
@@ -171,14 +182,15 @@ func (vapp *VoteApp) handleMessage(msg *tgbotapi.Message) (err error) {
 			ChatID:    msg.Chat.ID,
 		}
 		if has, err := vapp.Store.HasVote(msgChatID); has {
-			respMsg := tgbotapi.NewMessage(msg.Chat.ID, "Already exists")
-			_, err = vapp.Bot.Send(respMsg)
-			return err
-		} else if err != nil {
+			return nil
+		} else if err == nil {
+			_, err = vapp.Store.NewVote(msg.Time(), msgChatID, msg.From.ID)
+		}
+		if err != nil {
 			return err
 		}
 
-		respMsg := tgbotapi.NewMessage(msg.Chat.ID, "let's vote it, guys")
+		respMsg := tgbotapi.NewMessage(msg.Chat.ID, "let's score it, guys")
 		respMsg.ReplyToMessageID = msgID
 
 		respMsg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
