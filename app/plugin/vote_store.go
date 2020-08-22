@@ -77,7 +77,7 @@ func (s *VoteStore) AddVote(ts time.Time, msg MsgChatID, userID int, increment i
 	data := &MsgVote{ID: msg}
 	err := s.Bkt.One("ID", data.ID, data)
 
-	if err != nil {
+	if err == nil {
 		if data.Users[userID]*increment >= 0 {
 			data.Users[userID] += increment
 			err = s.Bkt.Update(data)
