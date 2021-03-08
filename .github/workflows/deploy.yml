@@ -42,5 +42,5 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: |
           scp docker-compose.yml vdimir@$SSH_HOST:/srv/tobym
-          ssh vdimir@$SSH_HOST "cd /srv/tobym && docker-compose pull"
+          ssh vdimir@$SSH_HOST "cd /srv/tobym && docker pull vdimir/tobym:latest && docker-compose pull"
           ssh vdimir@$SSH_HOST "cd /srv/tobym && BOT_TOKEN=${BOT_TOKEN} WEB_APP_URL=${WEB_APP_URL} docker-compose up -d"
