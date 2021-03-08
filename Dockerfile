@@ -1,4 +1,4 @@
-FROM golang:1.14-alpine as build-backend
+FROM golang:1.15-alpine as build-backend
 
 ARG REVISION_INFO
 
