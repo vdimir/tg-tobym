@@ -2,9 +2,6 @@ name: deploy
 on:
   push:
     branches: [main]
-    paths:
-      - '**'
-      - '!README.md'
 
 jobs:
   deploy:
