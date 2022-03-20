@@ -17,6 +17,41 @@ services:
 
         environment:
             - BOT_TOKEN
-            - WEB_APP_URL
+            - WEB_APP_URL=https://tobym.markify.dev
         volumes:
             - ./var:/srv/var
+        labels:
+            reproxy.server: '*'
+            reproxy.route: '^/(.*)'
+            reproxy.dest: '/$$1'
+
+    reproxy-https:
+        image: umputun/reproxy:master
+        container_name: reproxy-https
+        hostname: reproxy-https
+        restart: always
+        network_mode: host
+
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - /etc/ssl/certs/:/etc/ssl/certs/
+        environment:
+            - LISTEN=0.0.0.0:443
+            - DOCKER_ENABLED=true
+            - SSL_TYPE=auto
+            - SSL_HTTP_PORT=8000
+            - SSL_ACME_FQDN=tobym.markify.dev
+
+    reproxy-http:
+        image: umputun/reproxy:master
+        container_name: reproxy-http
+        hostname: reproxy-http
+        restart: always
+        network_mode: host
+
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+        environment:
+            - LISTEN=0.0.0.0:80
+            - DOCKER_ENABLED=true
+            - SSL_TYPE=none
