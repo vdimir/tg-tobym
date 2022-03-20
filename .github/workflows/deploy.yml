@@ -40,4 +40,4 @@ jobs:
           ssh root@$SSH_HOST "mkdir -p /srv/tobym"
           scp docker-compose.yml root@$SSH_HOST:/srv/tobym
           ssh root@$SSH_HOST "cd /srv/tobym && docker pull vdimir/tobym:latest && docker-compose pull"
-          ssh root@$SSH_HOST "cd /srv/tobym && BOT_TOKEN=${BOT_TOKEN} docker-compose up -d"
+          ssh root@$SSH_HOST "cd /srv/tobym && BOT_TOKEN=${BOT_TOKEN} docker-compose up -d --remove-orphans"

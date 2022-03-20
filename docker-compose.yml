@@ -23,7 +23,7 @@ services:
         labels:
             reproxy.server: '*'
             reproxy.route: '^/(.*)'
-            reproxy.dest: '/$$1'
+            reproxy.dest: '/@1'
 
     reproxy:
         image: umputun/reproxy:master
