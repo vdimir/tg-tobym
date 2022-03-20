@@ -21,7 +21,7 @@ jobs:
           ssh-keyscan $SSH_HOST >> ~/.ssh/known_hosts
           ssh-agent -a $SSH_AUTH_SOCK > /dev/null
           ssh-add - <<< "${{ secrets.SSH_DEPLOY_PRIVATE_KEY }}"
-          ssh -q vdimir@$SSH_HOST "echo ok"
+          ssh -q root@$SSH_HOST "echo ok"
 
       - name: Build docker image
         run: docker build --build-arg REVISION_INFO="${GITHUB_SHA:0:7}-$(date +%Y%m%d_%H%M%S)" . -t tobym
@@ -38,6 +38,7 @@ jobs:
           WEB_APP_URL: https://tobym.markify.dev
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: |
-          scp docker-compose.yml vdimir@$SSH_HOST:/srv/tobym
-          ssh vdimir@$SSH_HOST "cd /srv/tobym && docker pull vdimir/tobym:latest && docker-compose pull"
-          ssh vdimir@$SSH_HOST "cd /srv/tobym && BOT_TOKEN=${BOT_TOKEN} WEB_APP_URL=${WEB_APP_URL} docker-compose up -d"
+          ssh root@$SSH_HOST "mkdir -p /srv/tobym"
+          scp docker-compose.yml root@$SSH_HOST:/srv/tobym
+          ssh root@$SSH_HOST "cd /srv/tobym && docker pull vdimir/tobym:latest && docker-compose pull"
+          ssh root@$SSH_HOST "cd /srv/tobym && BOT_TOKEN=${BOT_TOKEN} WEB_APP_URL=${WEB_APP_URL} docker-compose up -d"

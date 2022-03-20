@@ -1,6 +1,7 @@
 package store
 
 import (
+	"os"
 	"path"
 
 	"github.com/asdine/storm/v3"
@@ -13,6 +14,8 @@ type Storage struct {
 
 // NewStorage creates new Stroage
 func NewStorage(folderPath string) (*Storage, error) {
+	_ = os.MkdirAll(folderPath, os.ModePerm)
+
 	db, err := storm.Open(path.Join(folderPath, "data.db"))
 	if err != nil {
 		return nil, err

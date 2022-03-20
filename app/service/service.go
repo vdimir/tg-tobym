@@ -97,14 +97,15 @@ func setupPlugins(srv *BotService) {
 	statPlugin := &plugin.LastMessage{}
 	srv.plugins = []plugin.PlugIn{
 		statPlugin,
-		&plugin.VoteApp{
-			Bot:   srv.bot,
-			Store: plugin.NewVoteStore(srv.store.GetBucket("votes")),
-			Stat:  statPlugin,
-		},
 		&plugin.ShowVersion{
 			Bot:     srv.bot,
 			Version: srv.cfg.AppVersion,
+		},
+		&plugin.TimezoneConverter{
+			Bot: srv.bot,
+			Store: &plugin.TimezoneConverterStore{
+				Bkt: srv.store.GetBucket("timezone_converter"),
+			},
 		},
 		&plugin.Monitor{
 			Bot:   srv.bot,
