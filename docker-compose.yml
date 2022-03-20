@@ -39,7 +39,7 @@ services:
             - LISTEN=0.0.0.0:443
             - DOCKER_ENABLED=true
             - SSL_TYPE=auto
-            - SSL_HTTP_PORT=8000
+            - SSL_HTTP_PORT=8080
             - SSL_ACME_FQDN=tobym.markify.dev
 
     reproxy-http:
