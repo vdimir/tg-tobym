@@ -41,5 +41,4 @@ services:
             - SSL_TYPE=auto
             - SSL_ACME_LOCATION=/srv/var/ssl
             - SSL_HTTP_PORT=8080
-            - SSL_ACME_LOCATION=/srv/var/ssl
             - SSL_ACME_FQDN=tobym.markify.dev
