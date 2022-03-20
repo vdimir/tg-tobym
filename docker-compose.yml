@@ -17,7 +17,7 @@ services:
 
         environment:
             - BOT_TOKEN
-            - WEB_APP_URL=https://tobym.markify.dev
+            - WEB_APP_URL=http://tobym.markify.dev
         volumes:
             - ./var:/srv/var
         labels:
@@ -35,10 +35,12 @@ services:
         volumes:
             - /var/run/docker.sock:/var/run/docker.sock:ro
             - /etc/ssl/certs/:/etc/ssl/certs/
+            - ./var/ssl:/srv/var/ssl
         environment:
             - LISTEN=0.0.0.0:443
             - DOCKER_ENABLED=true
             - SSL_TYPE=auto
+            - SSL_ACME_LOCATION=/srv/var/ssl
             - SSL_HTTP_PORT=8080
             - SSL_ACME_FQDN=tobym.markify.dev
 
