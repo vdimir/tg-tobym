@@ -9,6 +9,10 @@ ENV CGO_ENABLED 0
 
 RUN go get -v -t -d ./...
 
+RUN apk add --update-cache \
+    git \
+  && rm -rf /var/cache/apk/*
+
 RUN export GOPATH=$(go env GOPATH) && \
     echo "Building..." && \
       version="${REVISION_INFO:-unknown}" && \
@@ -17,7 +21,7 @@ RUN export GOPATH=$(go env GOPATH) && \
 
 RUN go test -timeout=60s ./...
 
-FROM alpine:3.12
+FROM alpine:3.15
 
 WORKDIR /srv
 
