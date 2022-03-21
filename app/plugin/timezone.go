@@ -55,6 +55,14 @@ func (tapp *TimezoneConverter) HandleUpdate(ctx context.Context, upd *tgbotapi.U
 	if upd.Message != nil {
 		chatID := upd.Message.Chat.ID
 		if upd.Message.Command() == "set_timezones" {
+			if upd.Message.CommandArguments() == "" {
+				resp := tgbotapi.NewMessage(chatID, "command need arguments")
+				_, err = tapp.Bot.Send(resp)
+				if err != nil {
+					return true, err
+				}
+				return true, nil
+			}
 			// err := tapp.Store.Bkt.Select(q.Eq("ChatID", chatID)).Delete(&chatToken{})
 			// if err != nil {
 			// 	log.Printf("[ERROR] error deleting locations from storage %v", err)
@@ -64,7 +72,7 @@ func (tapp *TimezoneConverter) HandleUpdate(ctx context.Context, upd *tgbotapi.U
 			for _, tzName := range tzNames {
 				tz, err := time.LoadLocation(tzName)
 				if err != nil {
-					resp := tgbotapi.NewMessage(chatID, fmt.Sprintf("Can't find timezone '%s'", tzName))
+					resp := tgbotapi.NewMessage(chatID, fmt.Sprintf("Can't find timezone '%s': %s", tzName, err.Error()))
 					_, err = tapp.Bot.Send(resp)
 					if err != nil {
 						return true, err
