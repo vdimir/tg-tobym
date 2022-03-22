@@ -9,9 +9,7 @@ ENV CGO_ENABLED 0
 
 RUN go get -v -t -d ./...
 
-RUN apk add --update-cache \
-    git \
-  && rm -rf /var/cache/apk/*
+RUN apk add --no-cache git
 
 RUN export GOPATH=$(go env GOPATH) && \
     echo "Building..." && \
@@ -24,6 +22,8 @@ RUN go test -timeout=60s ./...
 FROM alpine:3.15
 
 WORKDIR /srv
+
+RUN apk add --no-cache tzdata
 
 COPY --from=build-backend /build/tobym /srv/tobym
 
