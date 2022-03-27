@@ -106,12 +106,20 @@ func (tapp *TimezoneConverter) HandleUpdate(ctx context.Context, upd *tgbotapi.U
 		if upd.Message.Command() == "time" {
 			if tzs, has := tapp.timezones[chatID]; has && len(tzs.Locations) > 1 {
 				textLines := []string{}
-				d, err := naturaldate.Parse(upd.Message.CommandArguments(), time.Now().In(tzs.PrimLocation))
-				if err != nil {
-					resp := tgbotapi.NewMessage(chatID, fmt.Sprintf("Can't find time '%s'", err))
-					_, err = tapp.Bot.Send(resp)
+
+				args := upd.Message.CommandArguments()
+				var d time.Time
+				var err error
+				if args == "" {
+					d = time.Now().In(tzs.PrimLocation)
+				} else {
+					d, err = naturaldate.Parse(upd.Message.CommandArguments(), time.Now().In(tzs.PrimLocation))
 					if err != nil {
-						return true, err
+						resp := tgbotapi.NewMessage(chatID, fmt.Sprintf("Can't find time '%s'", err))
+						_, err = tapp.Bot.Send(resp)
+						if err != nil {
+							return true, err
+						}
 					}
 				}
 				for _, tz := range tzs.Locations {
